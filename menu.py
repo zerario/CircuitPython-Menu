@@ -34,7 +34,7 @@ class Menu:
         main_group = displayio.Group()
         self.display.display.show(main_group)
 
-        layout = self.render()
+        layout, labels = self.render()
         main_group.append(layout)
         selected = 0
 
@@ -48,12 +48,13 @@ class Menu:
 
             delta = self.encoder.delta()
             if delta:
+                labels[selected].color = WHITE
+                labels[selected].background_color = BLACK
                 selected = (selected + delta) % self.lines
-                main_group.pop()
-                layout = self.render(selected)
-                main_group.append(layout)
+                labels[selected].color = BLACK
+                labels[selected].background_color = WHITE
 
-    def render(self, selected: int = 0) -> GridLayout:
+    def render(self, selected: int = 0) -> tuple[GridLayout, list[Label]]:
         layout = GridLayout(
             x=0,
             y=0,
@@ -61,6 +62,7 @@ class Menu:
             height=self.display.HEIGHT,
             grid_size=(1, self.lines),
         )
+        labels = []
 
         for i, item in enumerate(self.items):
             label = Label(
@@ -69,8 +71,10 @@ class Menu:
                 color=BLACK if i == selected else WHITE,
                 background_color=WHITE if i == selected else BLACK,
             )
+            labels.append(label)
             layout.add_content(label, grid_position=(0, i), cell_size=(1, 1))
-        return layout
+
+        return layout, labels
 
 
 class FinalMenuItem(AbstractMenuItem):
