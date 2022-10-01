@@ -33,19 +33,16 @@ class ActivateAction(Action):
 
 
 class IgnoreAction(Action):
-
     def __init__(self, *, changed: bool) -> None:
         self.changed = changed
 
 
 class ExitAction(Action):
-
     def __init__(self, value: Any) -> None:
         self.value = value
 
 
 class SubMenuAction(Action):
-
     def __init__(self, menu: "Menu") -> None:
         self.menu = menu
 
@@ -93,79 +90,98 @@ class Menu:
         self.font_width, self.font_height = self.font.get_bounding_box()
         self.lines = min(len(self.items), self.display.HEIGHT // self.font_height)
 
+        self.display_group = displayio.Group()
+        self.labels = self.get_labels()
+        self.layout = self.paginate(self.labels)
+        self.display_group.append(self.layout)
+
+        self.page_label = self.get_page_label()
+        self.display_group.append(self.page_label)
+
+        self.selected = 0
+        self.item_active = False
+        self.highlight_labels(text=True)
+
+    @property
+    def item(self) -> AbstractMenuItem:
+        return self.items[self.selected]
+
+    @property
+    def text_label(self) -> Label:
+        text_label, _ = self.labels[self.selected]
+        return text_label
+
+    @property
+    def value_label(self) -> Label | None:
+        _, value_label = self.labels[self.selected]
+        return value_label
+
+    def show(self):
+        self.display.display.show(self.display_group)
+
     def run(self):
-        main_group = displayio.Group()
-        self.display.display.show(main_group)
-
-        labels = self.get_labels()
-        layout = self.paginate(labels)
-        main_group.append(layout)
-
-        page_label = self.get_page_label()
-        main_group.append(page_label)
-
-        selected = 0
-        item = self.items[selected]
-        text_label, value_label = labels[selected]
-        item_active = False
-        self.highlight_label(text_label)
+        self.show()
 
         while True:
             if self.encoder.pressed:
-                if item_active:
-                    item_active = False
-                    self.highlight_label(text_label)
-                    self.highlight_label(value_label, False)
+                if self.item_active:
+                    self.item_active = False
+                    self.highlight_labels(text=True, value=False)
                 else:
-                    action = item.activate()
+                    action = self.item.activate()
                     if isinstance(action, SubMenuAction):
                         sub_ret = action.menu.run()
                         if sub_ret is not BACK_SENTINEL:
                             return sub_ret
-                        self.display.display.show(main_group)
+                        self.show()
                     elif isinstance(action, ExitAction):
                         return action.value
                     elif isinstance(action, ActivateAction):
-                        item_active = True
-                        self.highlight_label(text_label, False)
-                        self.highlight_label(value_label)
+                        self.item_active = True
+                        self.highlight_labels(text=False, value=True)
                     elif isinstance(action, IgnoreAction):
                         if action.changed:
-                            self.refresh_value(value_label, item)
+                            self.refresh_value()
                     else:
                         assert False, action  # unreachable
                 time.sleep(self.DEBOUNCE_TIME)  # FIXME use adafruit lib?
 
-            delta = self.encoder.delta()
-            if delta and item_active:
-                item.process_delta(delta)
-                self.refresh_value(value_label, item)
-            elif delta:
-                self.highlight_label(text_label, False)
+            self.handle_rotation()
 
-                selected += delta
-                selected %= len(labels)
-                item = self.items[selected]
-                text_label, value_label = labels[selected]
+    def handle_rotation(self):
+        delta = self.encoder.delta()
+        if delta and self.item_active:
+            self.item.process_delta(delta)
+            self.refresh_value()
+        elif delta:
+            self.highlight_labels(text=False)
 
-                self.highlight_label(text_label, True)
+            self.selected += delta
+            self.selected %= len(self.labels)
 
-                page_index = selected // self.lines
-                if page_index != layout.showing_page_index:
-                    layout.show_page(page_index=page_index)
-                    page_label.text = self.page_label_str(page_index)
+            self.highlight_labels(text=True)
 
-    def highlight_label(self, label: Label | None, active: bool = True) -> None:
-        assert label is not None  # annotation only exists to make calling easier
-        label.color = BLACK if active else WHITE
-        label.background_color = WHITE if active else BLACK
+            page_index = self.selected // self.lines
+            if page_index != self.layout.showing_page_index:
+                self.layout.show_page(page_index=page_index)
+                self.page_label.text = self.page_label_str(page_index)
 
-    def refresh_value(self, label: Label | None, item: AbstractMenuItem) -> None:
-        if label is None:
-            return
-        value = item.value_str()
+    def highlight_labels(
+        self, text: bool | None = None, value: bool | None = None
+    ) -> None:
+        if text is not None:
+            self.text_label.color = BLACK if text else WHITE
+            self.text_label.background_color = WHITE if text else BLACK
+        if value is not None:
+            assert self.value_label is not None
+            self.value_label.color = BLACK if value else WHITE
+            self.value_label.background_color = WHITE if value else BLACK
+
+    def refresh_value(self) -> None:
+        value = self.item.value_str()
         assert value is not None
-        label.text = value
+        assert self.value_label is not None
+        self.value_label.text = value
 
     def create_label(self, text: str, x: int = 0, y: int = 0) -> Label:
         return Label(
@@ -393,9 +409,9 @@ class SubMenuItem(AbstractMenuItem):
 
     def activate(self) -> SubMenuAction:
         assert self.menu is not None
-        return SubMenuAction(Menu(
-            display=self.menu.display, encoder=self.menu.encoder, items=self.value
-        ))
+        return SubMenuAction(
+            Menu(display=self.menu.display, encoder=self.menu.encoder, items=self.value)
+        )
 
     def value_str(self) -> None:
         return None
