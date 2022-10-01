@@ -1,5 +1,6 @@
 import displayio
 import terminalio
+
 try:
     from typing import Any
 except ImportError:
