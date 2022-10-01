@@ -20,7 +20,6 @@ WHITE = 0xFFFFFF
 
 
 class ExitMenu:
-
     def __init__(self, value: Any):
         self.value = value
 
@@ -66,54 +65,63 @@ class Menu:
         labels = self.get_labels()
         layout = self.paginate(labels)
         main_group.append(layout)
+
         selected = 0
+        item = self.items[selected]
+        row_labels = labels[selected]
         item_active = False
-        self.highlight_label(labels[0][0], True)
+        self.highlight_labels(row_labels, True)
 
         while True:
             if self.encoder.pressed:
-                item = self.items[selected]
                 if item_active:
                     item_active = False
-                    self.highlight_label(labels[selected][1], False)
-                    self.highlight_label(labels[selected][0], True)
+                    self.highlight_labels(row_labels, True, False)
                 else:
                     activated = item.activate()
                     if isinstance(activated, ExitMenu):
                         return activated.value
                     elif activated:
                         item_active = True
-                        self.highlight_label(labels[selected][0], False)
-                        self.highlight_label(labels[selected][1], True)
+                        self.highlight_labels(row_labels, False, True)
                     else:
                         # item might have changed
-                        self.refresh_labels(labels[selected], item)
+                        self.refresh_labels(row_labels, item)
                 time.sleep(self.DEBOUNCE_TIME)  # FIXME use adafruit lib?
 
             delta = self.encoder.delta()
             if delta and item_active:
-                item = self.items[selected]
                 item.process_delta(delta)
-                self.refresh_labels(labels[selected], item)
+                self.refresh_labels(row_labels, item)
             elif delta:
-                self.highlight_label(labels[selected][0], False)
+                self.highlight_labels(row_labels, False)
 
                 selected += delta
                 selected %= len(labels)
+                item = self.items[selected]
+                row_labels = labels[selected]
 
-                self.highlight_label(labels[selected][0], True)
+                self.highlight_labels(row_labels, True)
 
                 page_index = selected // self.lines
                 if page_index != layout.showing_page_index:
                     layout.show_page(page_index=page_index)
 
-    def highlight_label(self, label: Label | None, active: bool) -> None:
-        if label is None:
-            return
-        label.color = BLACK if active else WHITE
-        label.background_color = WHITE if active else BLACK
+    def highlight_labels(
+        self,
+        labels: tuple[Label, Label | None],
+        left_active: bool,
+        right_active: bool = False,
+    ) -> None:
+        labels[0].color = BLACK if left_active else WHITE
+        labels[0].background_color = WHITE if left_active else BLACK
+        if labels[1] is not None:
+            labels[1].color = BLACK if right_active else WHITE
+            labels[1].background_color = WHITE if right_active else BLACK
 
-    def refresh_labels(self, labels: tuple[Label, Label | None], item: AbstractMenuItem) -> None:
+    def refresh_labels(
+        self, labels: tuple[Label, Label | None], item: AbstractMenuItem
+    ) -> None:
         for x, text in enumerate(item.get_texts()):
             if text is not None:
                 label = labels[x]
@@ -229,7 +237,6 @@ class SecondsMenuItem(IntMenuItem):
 
 
 class ToggleMenuItem(AbstractMenuItem):
-
     def __init__(self, text: str, default: bool = False) -> None:
         self.text = text
         self.value = default
