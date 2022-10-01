@@ -3,9 +3,9 @@ import terminalio
 import time
 
 try:
-    from typing import Any
+    from typing import Any, TYPE_CHECKING
 except ImportError:
-    pass
+    TYPE_CHECKING = False
 
 from adafruit_display_text.label import Label
 from adafruit_displayio_layout.layouts.grid_layout import GridLayout
@@ -28,7 +28,7 @@ class AbstractMenuItem:
     def process_delta(self, delta: int) -> None:
         raise NotImplementedError
 
-    def get_texts(self) -> tuple[str, str | None]:
+    def value_str(self) -> str | None:
         raise NotImplementedError
 
     def activate(self) -> bool | ExitMenu:
@@ -42,6 +42,11 @@ class AbstractMenuItem:
         - An instance of ExitMenu: The given value gets returned from run().
         """
         raise NotImplementedError
+
+    if TYPE_CHECKING:
+        @property
+        def text(self) -> str:
+            raise NotImplementedError
 
 
 class Menu:
@@ -68,85 +73,76 @@ class Menu:
 
         selected = 0
         item = self.items[selected]
-        row_labels = labels[selected]
+        text_label, value_label = labels[selected]
         item_active = False
-        self.highlight_labels(row_labels, True)
+        self.highlight_label(text_label)
 
         while True:
             if self.encoder.pressed:
                 if item_active:
                     item_active = False
-                    self.highlight_labels(row_labels, True, False)
+                    self.highlight_label(text_label)
+                    self.highlight_label(value_label, False)
                 else:
                     activated = item.activate()
                     if isinstance(activated, ExitMenu):
                         return activated.value
                     elif activated:
                         item_active = True
-                        self.highlight_labels(row_labels, False, True)
+                        self.highlight_label(text_label, False)
+                        self.highlight_label(value_label)
                     else:
                         # item might have changed
-                        self.refresh_labels(row_labels, item)
+                        self.refresh_value(value_label, item)
                 time.sleep(self.DEBOUNCE_TIME)  # FIXME use adafruit lib?
 
             delta = self.encoder.delta()
             if delta and item_active:
                 item.process_delta(delta)
-                self.refresh_labels(row_labels, item)
+                self.refresh_value(value_label, item)
             elif delta:
-                self.highlight_labels(row_labels, False)
+                self.highlight_label(text_label, False)
 
                 selected += delta
                 selected %= len(labels)
                 item = self.items[selected]
-                row_labels = labels[selected]
+                text_label, value_label = labels[selected]
 
-                self.highlight_labels(row_labels, True)
+                self.highlight_label(text_label, True)
 
                 page_index = selected // self.lines
                 if page_index != layout.showing_page_index:
                     layout.show_page(page_index=page_index)
 
-    def highlight_labels(
-        self,
-        labels: tuple[Label, Label | None],
-        left_active: bool,
-        right_active: bool = False,
-    ) -> None:
-        labels[0].color = BLACK if left_active else WHITE
-        labels[0].background_color = WHITE if left_active else BLACK
-        if labels[1] is not None:
-            labels[1].color = BLACK if right_active else WHITE
-            labels[1].background_color = WHITE if right_active else BLACK
+    def highlight_label(self, label: Label | None, active: bool = True) -> None:
+        assert label is not None  # annotation only exists to make calling easier
+        label.color = BLACK if active else WHITE
+        label.background_color = WHITE if active else BLACK
 
-    def refresh_labels(
-        self, labels: tuple[Label, Label | None], item: AbstractMenuItem
-    ) -> None:
-        for x, text in enumerate(item.get_texts()):
-            if text is not None:
-                label = labels[x]
-                assert label is not None
-                label.text = text
+    def refresh_value(self, label: Label | None, item: AbstractMenuItem) -> None:
+        assert label is not None  # annotation only exists to make calling easier
+        value = item.value_str()
+        assert value is not None
+        label.text = value
+
+    def create_label(self, text: str) -> Label:
+        return Label(
+            self.font,
+            text=text,
+            # initial selected item gets handled in run()
+            color=WHITE,
+            background_color=BLACK,
+        )
 
     def get_labels(self) -> list[tuple[Label, Label | None]]:
         labels = []
         for item in self.items:
-            row_labels = []
-            for text in item.get_texts():
-                if text is None:
-                    row_labels.append(None)
-                    continue
-
-                label = Label(
-                    self.font,
-                    text=text,
-                    # initial selected item gets handled in run()
-                    color=WHITE,
-                    background_color=BLACK,
-                )
-                row_labels.append(label)
-
-            labels.append(tuple(row_labels))
+            value = item.value_str()
+            row_labels = (
+                self.create_label(item.text),
+                None if value is None else self.create_label(value)
+            )
+            labels.append(row_labels)
 
         return labels
 
@@ -184,8 +180,8 @@ class FinalMenuItem(AbstractMenuItem):
         self.text = text
         self.value = value
 
-    def get_texts(self) -> tuple[str, None]:
-        return self.text, None
+    def value_str(self) -> None:
+        return None
 
     def activate(self) -> ExitMenu:
         # Exit the menu on activation
@@ -225,8 +221,8 @@ class IntMenuItem(AbstractMenuItem):
     def process_delta(self, delta: int) -> None:
         self.value = utils.clamp(self.value + delta, self.minimum, self.maximum)
 
-    def get_texts(self) -> tuple[str, str]:
-        return self.text, f"{self.value}{self.suffix}"
+    def value_str(self) -> str:
+        return f"{self.value}{self.suffix}"
 
 
 class SecondsMenuItem(IntMenuItem):
@@ -245,5 +241,5 @@ class ToggleMenuItem(AbstractMenuItem):
         self.value = not self.value
         return False
 
-    def get_texts(self) -> tuple[str, str]:
-        return self.text, "[x]" if self.value else "[ ]"
+    def value_str(self) -> str:
+        return "[x]" if self.value else "[ ]"
