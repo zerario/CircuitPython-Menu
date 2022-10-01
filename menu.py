@@ -45,7 +45,8 @@ class Menu:
         main_group = displayio.Group()
         self.display.display.show(main_group)
 
-        layout, labels = self.render()
+        labels = self.get_labels()
+        layout = self.paginate(labels)
         main_group.append(layout)
         selected = 0
         item_active = False
@@ -87,18 +88,38 @@ class Menu:
                 if page_index != layout.showing_page_index:
                     layout.show_page(page_index=page_index)
 
-
     def highlight_label(self, label: Label | None, active: bool) -> None:
         if label is None:
             return
         label.color = BLACK if active else WHITE
         label.background_color = WHITE if active else BLACK
 
-    def render(self) -> tuple[PageLayout, list[tuple[Label, Label | None]]]:
-        page_layout = PageLayout(0, 0)
+    def get_labels(self) -> list[tuple[Label, Label | None]]:
         labels = []
+        for item in self.items:
+            row_labels = []
+            for text in item.get_texts():
+                if text is None:
+                    row_labels.append(None)
+                    continue
 
-        for items in utils.chunk(self.items, self.lines):
+                label = Label(
+                    self.font,
+                    text=text,
+                    # initial selected item gets handled in run()
+                    color=WHITE,
+                    background_color=BLACK,
+                )
+                row_labels.append(label)
+
+            labels.append(tuple(row_labels))
+
+        return labels
+
+    def paginate(self, labels: list[tuple[Label, Label | None]]) -> PageLayout:
+        page_layout = PageLayout(0, 0)
+
+        for page_labels in utils.chunk(labels, self.lines):
             layout = GridLayout(
                 x=0,
                 y=0,
@@ -107,27 +128,14 @@ class Menu:
                 grid_size=(2, self.lines),
             )
             page_layout.add_content(layout)
-            for y, item in enumerate(items):
-                row_labels = []
+            for y, col_labels in enumerate(page_labels):
+                for x, label in enumerate(col_labels):
+                    if label is not None:
+                        layout.add_content(
+                            label, grid_position=(x, y), cell_size=(1, 1)
+                        )
 
-                for x, text in enumerate(item.get_texts()):
-                    if text is None:
-                        row_labels.append(None)
-                        continue
-
-                    label = Label(
-                        self.font,
-                        text=text,
-                        # initial selected item gets handled in run()
-                        color=WHITE,
-                        background_color=BLACK,
-                    )
-                    row_labels.append(label)
-                    layout.add_content(label, grid_position=(x, y), cell_size=(1, 1))
-
-                labels.append(tuple(row_labels))
-
-        return page_layout, labels
+        return page_layout
 
 
 class FinalMenuItem(AbstractMenuItem):
