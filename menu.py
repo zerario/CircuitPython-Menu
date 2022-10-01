@@ -19,6 +19,7 @@ import utils
 BLACK = 0x000000
 WHITE = 0xFFFFFF
 UNSET = object()
+BACK_SENTINEL = object()
 
 
 class ExitMenu:
@@ -95,7 +96,9 @@ class Menu:
                 else:
                     activated = item.activate()
                     if isinstance(activated, Menu):
-                        activated.run()
+                        sub_ret = activated.run()
+                        if sub_ret is not BACK_SENTINEL:
+                            return sub_ret
                         self.display.display.show(main_group)
                     elif isinstance(activated, ExitMenu):
                         return activated.value
@@ -218,6 +221,13 @@ class FinalMenuItem(AbstractMenuItem):
 
     def __repr__(self) -> str:
         return f"FinalMenuItem({repr(self.text)}, ...)"
+
+
+class BackMenuItem(FinalMenuItem):
+    """Go back from a sub-menu."""
+
+    def __init__(self, text: str = "Back") -> None:
+        super().__init__(text, value=BACK_SENTINEL)
 
 
 class CallbackMenuItem(AbstractMenuItem):
