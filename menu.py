@@ -123,30 +123,31 @@ class Menu:
         self.show()
 
         while True:
-            if self.encoder.pressed:
-                if self.item_active:
-                    self.item_active = False
-                    self.highlight_labels(text=True, value=False)
-                else:
-                    action = self.item.activate()
-                    if isinstance(action, SubMenuAction):
-                        sub_ret = action.menu.run()
-                        if sub_ret is not BACK_SENTINEL:
-                            return sub_ret
-                        self.show()
-                    elif isinstance(action, ExitAction):
-                        return action.value
-                    elif isinstance(action, ActivateAction):
-                        self.item_active = True
-                        self.highlight_labels(text=False, value=True)
-                    elif isinstance(action, IgnoreAction):
-                        if action.changed:
-                            self.refresh_value()
-                    else:
-                        assert False, action  # unreachable
-                time.sleep(self.DEBOUNCE_TIME)  # FIXME use adafruit lib?
-
             self.handle_rotation()
+            if not self.encoder.pressed:
+                continue
+
+            if self.item_active:
+                self.item_active = False
+                self.highlight_labels(text=True, value=False)
+            else:
+                action = self.item.activate()
+                if isinstance(action, SubMenuAction):
+                    sub_ret = action.menu.run()
+                    if sub_ret is not BACK_SENTINEL:
+                        return sub_ret
+                    self.show()
+                elif isinstance(action, ExitAction):
+                    return action.value
+                elif isinstance(action, ActivateAction):
+                    self.item_active = True
+                    self.highlight_labels(text=False, value=True)
+                elif isinstance(action, IgnoreAction):
+                    if action.changed:
+                        self.refresh_value()
+                else:
+                    assert False, action  # unreachable
+            time.sleep(self.DEBOUNCE_TIME)  # FIXME use adafruit lib?
 
     def handle_rotation(self):
         delta = self.encoder.delta()
