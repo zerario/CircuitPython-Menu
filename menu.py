@@ -19,11 +19,29 @@ BLACK = 0x000000
 WHITE = 0xFFFFFF
 
 
+class ExitMenu:
+
+    def __init__(self, value: Any):
+        self.value = value
+
+
 class AbstractMenuItem:
     def process_delta(self, delta: int) -> None:
         raise NotImplementedError
 
     def get_texts(self) -> tuple[str, str | None]:
+        raise NotImplementedError
+
+    def activate(self) -> bool | ExitMenu:
+        """Called when the button was pressed on this item.
+
+        A menu item can return three different values here:
+
+        - True: Item is activatable (and now selected, process_delta will be
+          called on rotations)
+        - False: Item is not activatable (but might e.g. toggle its value)
+        - An instance of ExitMenu: The given value gets returned from run().
+        """
         raise NotImplementedError
 
 
@@ -54,28 +72,29 @@ class Menu:
 
         while True:
             if self.encoder.pressed:
-                time.sleep(self.DEBOUNCE_TIME)  # FIXME use adafruit lib?
                 item = self.items[selected]
-                if isinstance(item, FinalMenuItem):
-                    return item.value
-                elif item_active:
+                if item_active:
                     item_active = False
                     self.highlight_label(labels[selected][1], False)
                     self.highlight_label(labels[selected][0], True)
-                elif not item_active:
-                    item_active = True
-                    self.highlight_label(labels[selected][0], False)
-                    self.highlight_label(labels[selected][1], True)
+                else:
+                    activated = item.activate()
+                    if isinstance(activated, ExitMenu):
+                        return activated.value
+                    elif activated:
+                        item_active = True
+                        self.highlight_label(labels[selected][0], False)
+                        self.highlight_label(labels[selected][1], True)
+                    else:
+                        # item might have changed
+                        self.refresh_labels(labels[selected], item)
+                time.sleep(self.DEBOUNCE_TIME)  # FIXME use adafruit lib?
 
             delta = self.encoder.delta()
             if delta and item_active:
                 item = self.items[selected]
                 item.process_delta(delta)
-                for x, text in enumerate(item.get_texts()):
-                    if text is not None:
-                        label = labels[selected][x]
-                        assert label is not None
-                        label.text = text
+                self.refresh_labels(labels[selected], item)
             elif delta:
                 self.highlight_label(labels[selected][0], False)
 
@@ -93,6 +112,13 @@ class Menu:
             return
         label.color = BLACK if active else WHITE
         label.background_color = WHITE if active else BLACK
+
+    def refresh_labels(self, labels: tuple[Label, Label | None], item: AbstractMenuItem) -> None:
+        for x, text in enumerate(item.get_texts()):
+            if text is not None:
+                label = labels[x]
+                assert label is not None
+                label.text = text
 
     def get_labels(self) -> list[tuple[Label, Label | None]]:
         labels = []
@@ -153,6 +179,10 @@ class FinalMenuItem(AbstractMenuItem):
     def get_texts(self) -> tuple[str, None]:
         return self.text, None
 
+    def activate(self) -> ExitMenu:
+        # Exit the menu on activation
+        return ExitMenu(self.value)
+
     def __repr__(self) -> str:
         return f"FinalMenuItem({repr(self.text)}, ...)"
 
@@ -181,6 +211,9 @@ class IntMenuItem(AbstractMenuItem):
         self.maximum = maximum
         self.suffix = suffix
 
+    def activate(self) -> bool:
+        return True
+
     def process_delta(self, delta: int) -> None:
         self.value = utils.clamp(self.value + delta, self.minimum, self.maximum)
 
@@ -193,3 +226,17 @@ class SecondsMenuItem(IntMenuItem):
         self, text: str, default: int = 0, minimum: int = 0, maximum: int | None = None
     ):
         super().__init__(text, default, minimum, maximum, suffix="s")
+
+
+class ToggleMenuItem(AbstractMenuItem):
+
+    def __init__(self, text: str, default: bool = False) -> None:
+        self.text = text
+        self.value = default
+
+    def activate(self) -> bool:
+        self.value = not self.value
+        return False
+
+    def get_texts(self) -> tuple[str, str]:
+        return self.text, "[x]" if self.value else "[ ]"
