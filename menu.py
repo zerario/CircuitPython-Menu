@@ -18,6 +18,7 @@ import utils
 
 BLACK = 0x000000
 WHITE = 0xFFFFFF
+UNSET = object()
 
 
 class ExitMenu:
@@ -287,3 +288,37 @@ class ToggleMenuItem(AbstractMenuItem):
 
     def value_str(self) -> str:
         return "[x]" if self.value else "[ ]"
+
+
+class SelectMenuItem(AbstractMenuItem):
+    def __init__(
+        self,
+        text: str,
+        values: list[Any],
+        default: Any = UNSET,
+        *,
+        cycle_on_activate: bool = False,
+    ) -> None:
+        if default is UNSET:
+            self.index = 0
+            default = values[0]
+        else:
+            self.index = values.index(default)
+
+        super().__init__(text, default)
+        self.values = values
+        self.cycle_on_activate = cycle_on_activate
+
+    def activate(self) -> bool:
+        if self.cycle_on_activate:
+            self.process_delta(1)
+            return False
+        return True
+
+    def process_delta(self, delta: int) -> None:
+        self.index += delta
+        self.index %= len(self.values)
+        self.value = self.values[self.index]
+
+    def value_str(self) -> str:
+        return str(self.value)
