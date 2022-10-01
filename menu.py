@@ -125,7 +125,8 @@ class Menu:
         label.background_color = WHITE if active else BLACK
 
     def refresh_value(self, label: Label | None, item: AbstractMenuItem) -> None:
-        assert label is not None  # annotation only exists to make calling easier
+        if label is None:
+            return
         value = item.value_str()
         assert value is not None
         label.text = value
@@ -206,6 +207,17 @@ class FinalMenuItem(AbstractMenuItem):
 
     def __repr__(self) -> str:
         return f"FinalMenuItem({repr(self.text)}, ...)"
+
+
+class CallbackMenuItem(AbstractMenuItem):
+    """A text item which calls a given callback (the value) if activated."""
+
+    def value_str(self) -> None:
+        return None
+
+    def activate(self) -> bool:
+        self.value()
+        return False
 
 
 class IntMenuItem(AbstractMenuItem):
