@@ -4,9 +4,9 @@ import time
 import math
 
 try:
-    from typing import Any, TYPE_CHECKING
+    from typing import Any
 except ImportError:
-    TYPE_CHECKING = False
+    pass
 
 from adafruit_display_text.label import Label
 from adafruit_displayio_layout.layouts.grid_layout import GridLayout
@@ -26,6 +26,11 @@ class ExitMenu:
 
 
 class AbstractMenuItem:
+
+    def __init__(self, text: str, value: Any) -> None:
+        self.text = text
+        self.value = value
+
     def process_delta(self, delta: int) -> None:
         raise NotImplementedError
 
@@ -43,12 +48,6 @@ class AbstractMenuItem:
         - An instance of ExitMenu: The given value gets returned from run().
         """
         raise NotImplementedError
-
-    if TYPE_CHECKING:
-
-        @property
-        def text(self) -> str:
-            raise NotImplementedError
 
 
 class Menu:
@@ -198,10 +197,6 @@ class FinalMenuItem(AbstractMenuItem):
     Useful to build menus where a single selection gets taken too.
     """
 
-    def __init__(self, text: str, value: Any) -> None:
-        self.text = text
-        self.value = value
-
     def value_str(self) -> None:
         return None
 
@@ -214,6 +209,7 @@ class FinalMenuItem(AbstractMenuItem):
 
 
 class IntMenuItem(AbstractMenuItem):
+
     def __init__(
         self,
         text: str,
@@ -222,6 +218,7 @@ class IntMenuItem(AbstractMenuItem):
         maximum: int | None = None,
         suffix: str = "",
     ) -> None:
+        super().__init__(text, default)
         if minimum is not None and default < minimum:
             raise ValueError(
                 f"Invalid default value {default}, needs to be >= {minimum}"
@@ -231,8 +228,6 @@ class IntMenuItem(AbstractMenuItem):
                 f"Invalid default value {default}, needs to be <= {maximum}"
             )
 
-        self.text = text
-        self.value = default
         self.minimum = minimum
         self.maximum = maximum
         self.suffix = suffix
@@ -256,8 +251,7 @@ class SecondsMenuItem(IntMenuItem):
 
 class ToggleMenuItem(AbstractMenuItem):
     def __init__(self, text: str, default: bool = False) -> None:
-        self.text = text
-        self.value = default
+        super().__init__(text, default)
 
     def activate(self) -> bool:
         self.value = not self.value
