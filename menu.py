@@ -173,8 +173,7 @@ class Menu:
         if text is not None:
             self.text_label.color = BLACK if text else WHITE
             self.text_label.background_color = WHITE if text else BLACK
-        if value is not None:
-            assert self.value_label is not None
+        if value is not None and self.value_label is not None:
             self.value_label.color = BLACK if value else WHITE
             self.value_label.background_color = WHITE if value else BLACK
 
