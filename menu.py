@@ -246,7 +246,10 @@ class Menu:
                 for x, label in enumerate(col_labels):
                     if label is not None:
                         layout.add_content(
-                            label, grid_position=(x, y), cell_size=(1, 1)
+                            label,
+                            grid_position=(x, y),
+                            # FIXME could we use the full width without value?
+                            cell_size=(1, 1),
                         )
 
         return page_layout
