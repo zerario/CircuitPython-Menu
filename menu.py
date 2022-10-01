@@ -255,13 +255,17 @@ class BackMenuItem(FinalMenuItem):
 
 
 class CallbackMenuItem(AbstractMenuItem):
-    """A text item which calls a given callback (the value) if activated."""
+    """A text item which calls a given callback (the value) if activated.
+
+    The callback gets the menu instance as argument.
+    """
 
     def value_str(self) -> None:
         return None
 
     def activate(self) -> IgnoreAction:
-        self.value()
+        assert self.menu is not None
+        self.value(self.menu)
         return IgnoreAction(changed=False)
 
 
