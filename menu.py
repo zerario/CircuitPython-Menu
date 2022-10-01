@@ -9,6 +9,7 @@ except ImportError:
 
 from adafruit_display_text.label import Label
 from adafruit_displayio_layout.layouts.grid_layout import GridLayout
+from adafruit_displayio_layout.layouts.page_layout import PageLayout
 
 import hardware as hw
 import utils
@@ -48,6 +49,7 @@ class Menu:
         main_group.append(layout)
         selected = 0
         item_active = False
+        self.highlight_label(labels[0][0], True)
 
         while True:
             if self.encoder.pressed:
@@ -75,8 +77,16 @@ class Menu:
                         label.text = text
             elif delta:
                 self.highlight_label(labels[selected][0], False)
-                selected = (selected + delta) % self.lines
+
+                selected += delta
+                selected %= len(labels)
+
                 self.highlight_label(labels[selected][0], True)
+
+                page_index = selected // self.lines
+                if page_index != layout.showing_page_index:
+                    layout.show_page(page_index=page_index)
+
 
     def highlight_label(self, label: Label | None, active: bool) -> None:
         if label is None:
@@ -84,39 +94,40 @@ class Menu:
         label.color = BLACK if active else WHITE
         label.background_color = WHITE if active else BLACK
 
-    def render(
-        self, selected: tuple[int, int] = (0, 0)
-    ) -> tuple[GridLayout, list[tuple[Label, Label | None]]]:
-        layout = GridLayout(
-            x=0,
-            y=0,
-            width=self.display.WIDTH,
-            height=self.display.HEIGHT,
-            grid_size=(2, self.lines),
-        )
+    def render(self) -> tuple[PageLayout, list[tuple[Label, Label | None]]]:
+        page_layout = PageLayout(0, 0)
         labels = []
 
-        for y, item in enumerate(self.items):
-            row_labels = []
+        for items in utils.chunk(self.items, self.lines):
+            layout = GridLayout(
+                x=0,
+                y=0,
+                width=self.display.WIDTH,
+                height=self.display.HEIGHT,
+                grid_size=(2, self.lines),
+            )
+            page_layout.add_content(layout)
+            for y, item in enumerate(items):
+                row_labels = []
 
-            for x, text in enumerate(item.get_texts()):
-                if text is None:
-                    row_labels.append(None)
-                    continue
+                for x, text in enumerate(item.get_texts()):
+                    if text is None:
+                        row_labels.append(None)
+                        continue
 
-                is_selected = (x, y) == selected
-                label = Label(
-                    self.font,
-                    text=text,
-                    color=BLACK if is_selected else WHITE,
-                    background_color=WHITE if is_selected else BLACK,
-                )
-                row_labels.append(label)
-                layout.add_content(label, grid_position=(x, y), cell_size=(1, 1))
+                    label = Label(
+                        self.font,
+                        text=text,
+                        # initial selected item gets handled in run()
+                        color=WHITE,
+                        background_color=BLACK,
+                    )
+                    row_labels.append(label)
+                    layout.add_content(label, grid_position=(x, y), cell_size=(1, 1))
 
-            labels.append(tuple(row_labels))
+                labels.append(tuple(row_labels))
 
-        return layout, labels
+        return page_layout, labels
 
 
 class FinalMenuItem(AbstractMenuItem):
