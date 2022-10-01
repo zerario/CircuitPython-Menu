@@ -30,6 +30,7 @@ class AbstractMenuItem:
     def __init__(self, text: str, value: Any) -> None:
         self.text = text
         self.value = value
+        self.menu: Menu | None = None  # gets set in Menu.__init__
 
     def process_delta(self, delta: int) -> None:
         raise NotImplementedError
@@ -37,15 +38,16 @@ class AbstractMenuItem:
     def value_str(self) -> str | None:
         raise NotImplementedError
 
-    def activate(self) -> bool | ExitMenu:
+    def activate(self) -> bool | ExitMenu | Menu:
         """Called when the button was pressed on this item.
 
-        A menu item can return three different values here:
+        A menu item can return different values here:
 
         - True: Item is activatable (and now selected, process_delta will be
           called on rotations)
         - False: Item is not activatable (but might e.g. toggle its value)
         - An instance of ExitMenu: The given value gets returned from run().
+        - An instance of Menu: The sub-menu gets displayed.
         """
         raise NotImplementedError
 
@@ -60,6 +62,9 @@ class Menu:
         self.display = display
         self.encoder = encoder
         self.items = items
+        for item in items:
+            item.menu = self
+
         self.font = terminalio.FONT
         self.font_width, self.font_height = self.font.get_bounding_box()
         self.lines = min(len(self.items), self.display.HEIGHT // self.font_height)
@@ -89,7 +94,10 @@ class Menu:
                     self.highlight_label(value_label, False)
                 else:
                     activated = item.activate()
-                    if isinstance(activated, ExitMenu):
+                    if isinstance(activated, Menu):
+                        activated.run()
+                        self.display.display.show(main_group)
+                    elif isinstance(activated, ExitMenu):
                         return activated.value
                     elif activated:
                         item_active = True
@@ -197,6 +205,9 @@ class FinalMenuItem(AbstractMenuItem):
 
     Useful to build menus where a single selection gets taken too.
     """
+
+    def __init__(self, text: str, value: Any = None) -> None:
+        super().__init__(text, value)
 
     def value_str(self) -> None:
         return None
@@ -336,3 +347,17 @@ class SelectMenuItem(AbstractMenuItem):
 
     def value_str(self) -> str:
         return str(self.value)
+
+
+class SubMenuItem(AbstractMenuItem):
+    def __init__(self, text: str, items: list[AbstractMenuItem]) -> None:
+        super().__init__(text, items)
+
+    def activate(self) -> Menu:
+        assert self.menu is not None
+        return Menu(
+            display=self.menu.display, encoder=self.menu.encoder, items=self.value
+        )
+
+    def value_str(self) -> None:
+        return None
