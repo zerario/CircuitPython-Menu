@@ -26,7 +26,6 @@ class ExitMenu:
 
 
 class AbstractMenuItem:
-
     def __init__(self, text: str, value: Any) -> None:
         self.text = text
         self.value = value
@@ -209,7 +208,6 @@ class FinalMenuItem(AbstractMenuItem):
 
 
 class IntMenuItem(AbstractMenuItem):
-
     def __init__(
         self,
         text: str,
@@ -242,11 +240,41 @@ class IntMenuItem(AbstractMenuItem):
         return f"{self.value}{self.suffix}"
 
 
-class SecondsMenuItem(IntMenuItem):
+class TimeMenuItem(AbstractMenuItem):
     def __init__(
-        self, text: str, default: int = 0, minimum: int = 0, maximum: int | None = None
+        self, text: str, default: int = 0, maximum: int | None = None, step: int = 1
     ):
-        super().__init__(text, default, minimum, maximum, suffix="s")
+        super().__init__(text, default)
+        self.maximum = maximum
+        self.step = step
+
+    def activate(self) -> bool:
+        return True
+
+    def process_delta(self, delta: int) -> None:
+        self.value = utils.clamp(self.value + delta * self.step, None, self.maximum)
+
+    def value_str(self) -> str:
+        hours, remainder = divmod(self.value, 3600)
+        minutes, seconds = divmod(remainder, 60)
+
+        parts = []
+        if hours:
+            parts.append(f"{hours}h")
+        if minutes:
+            parts.append(f"{minutes}m")
+        if seconds:
+            parts.append(f"{seconds}s")
+
+        if not parts:
+            step_suffixes = {
+                60: "m",
+                3600: "h",
+            }
+            suffix = step_suffixes.get(self.step, "s")
+            return f"0{suffix}"
+
+        return " ".join(parts)
 
 
 class ToggleMenuItem(AbstractMenuItem):
