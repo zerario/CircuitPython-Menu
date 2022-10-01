@@ -253,7 +253,9 @@ class TimeMenuItem(AbstractMenuItem):
         return True
 
     def process_delta(self, delta: int) -> None:
-        self.value = utils.clamp(self.value + delta * self.step, None, self.maximum)
+        self.value = utils.clamp(
+            self.value + delta * self.step, lower=0, upper=self.maximum
+        )
 
     def value_str(self) -> str:
         hours, remainder = divmod(self.value, 3600)
