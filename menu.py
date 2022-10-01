@@ -27,12 +27,7 @@ class Action:
     pass
 
 
-class ActivateAction(Action):
-
-    pass
-
-
-class DeactivateAction(Action):
+class ActivationChangeAction(Action):
 
     pass
 
@@ -56,6 +51,7 @@ class AbstractMenuItem:
     def __init__(self, text: str, value: Any) -> None:
         self.text = text
         self.value = value
+        self.active = False
         self.menu: Menu | None = None  # gets set in Menu.__init__
 
     def process_delta(self, delta: int) -> None:
@@ -69,22 +65,13 @@ class AbstractMenuItem:
 
         A menu item can return different values here:
 
-        - ActivateAction: Item is activatable (and now selected, process_delta
-              will be called on rotations)
-        - IgnoreAction: Item is not activatable (but might e.g. toggle its value)
+        - ActivationChangeAction: Item was set to active or inactive.
+        - IgnoreAction: Item is not activatable (but might e.g. toggle its value).
         - ExitAction: The given value gets returned from run().
         - SubMenuAction: The sub-menu gets displayed.
         """
-        raise NotImplementedError
-
-    def deactivate(self) -> Action:
-        """Called when the button was pressed while this item was activated.
-
-        Usually should deactivate this item, but could get ignored.
-        Could also get creative and toggle a submenu, though!
-        """
-        return DeactivateAction()
-
+        self.active = not self.active
+        return ActivationChangeAction()
 
 class Menu:
 
@@ -112,7 +99,6 @@ class Menu:
         self.display_group.append(self.page_label)
 
         self.selected = 0
-        self.item_active = False
         self.highlight_labels(text=True)
 
     @property
@@ -140,27 +126,19 @@ class Menu:
             if not self.encoder.pressed:
                 continue
 
-            if self.item_active:
-                action = self.item.deactivate()
-            else:
-                action = self.item.activate()
+            action = self.item.activate()
 
             if isinstance(action, ExitAction):
                 return action.value
-            elif isinstance(action, ActivateAction):
-                self.item_active = True
-                self.highlight_labels(text=False, value=True)
-            elif isinstance(action, DeactivateAction):
-                self.item_active = False
-                self.highlight_labels(text=True, value=False)
+            elif isinstance(action, ActivationChangeAction):
+                self.highlight_labels(text=not self.item.active, value=self.item.active)
             elif isinstance(action, IgnoreAction):
                 if action.changed:
                     self.refresh_value()
             elif isinstance(action, SubMenuAction):
                 # just in case someone decides to use this as deactivation action
-                if self.item_active:
-                    self.item_active = False
-                    self.highlight_labels(text=True, value=False)
+                assert not self.item.active
+                self.highlight_labels(text=True, value=False)
 
                 sub_ret = action.menu.run()
                 if sub_ret is not BACK_SENTINEL:
@@ -173,7 +151,7 @@ class Menu:
 
     def handle_rotation(self):
         delta = self.encoder.delta()
-        if delta and self.item_active:
+        if delta and self.item.active:
             self.item.process_delta(delta)
             self.refresh_value()
         elif delta:
@@ -330,9 +308,6 @@ class IntMenuItem(AbstractMenuItem):
         self.maximum = maximum
         self.suffix = suffix
 
-    def activate(self) -> ActivateAction:
-        return ActivateAction()
-
     def process_delta(self, delta: int) -> None:
         self.value = utils.clamp(self.value + delta, self.minimum, self.maximum)
 
@@ -347,9 +322,6 @@ class TimeMenuItem(AbstractMenuItem):
         super().__init__(text, default)
         self.maximum = maximum
         self.step = step
-
-    def activate(self) -> ActivateAction:
-        return ActivateAction()
 
     def process_delta(self, delta: int) -> None:
         self.value = utils.clamp(
@@ -410,11 +382,11 @@ class SelectMenuItem(AbstractMenuItem):
         self.values = values
         self.cycle_on_activate = cycle_on_activate
 
-    def activate(self) -> IgnoreAction | ActivateAction:
+    def activate(self) -> IgnoreAction | ActivationChangeAction:
         if self.cycle_on_activate:
             self.process_delta(1)
             return IgnoreAction(changed=True)
-        return ActivateAction()
+        return super().activate()
 
     def process_delta(self, delta: int) -> None:
         self.index += delta
