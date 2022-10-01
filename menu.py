@@ -22,9 +22,32 @@ UNSET = object()
 BACK_SENTINEL = object()
 
 
-class ExitMenu:
-    def __init__(self, value: Any):
+class Action:
+
+    pass
+
+
+class ActivateAction(Action):
+
+    pass
+
+
+class IgnoreAction(Action):
+
+    def __init__(self, *, changed: bool) -> None:
+        self.changed = changed
+
+
+class ExitAction(Action):
+
+    def __init__(self, value: Any) -> None:
         self.value = value
+
+
+class SubMenuAction(Action):
+
+    def __init__(self, menu: "Menu") -> None:
+        self.menu = menu
 
 
 class AbstractMenuItem:
@@ -39,16 +62,16 @@ class AbstractMenuItem:
     def value_str(self) -> str | None:
         raise NotImplementedError
 
-    def activate(self) -> bool | ExitMenu | Menu:
+    def activate(self) -> Action:
         """Called when the button was pressed on this item.
 
         A menu item can return different values here:
 
-        - True: Item is activatable (and now selected, process_delta will be
-          called on rotations)
-        - False: Item is not activatable (but might e.g. toggle its value)
-        - An instance of ExitMenu: The given value gets returned from run().
-        - An instance of Menu: The sub-menu gets displayed.
+        - ActivateAction: Item is activatable (and now selected, process_delta
+              will be called on rotations)
+        - IgnoreAction: Item is not activatable (but might e.g. toggle its value)
+        - ExitAction: The given value gets returned from run().
+        - SubMenuAction: The sub-menu gets displayed.
         """
         raise NotImplementedError
 
@@ -94,21 +117,23 @@ class Menu:
                     self.highlight_label(text_label)
                     self.highlight_label(value_label, False)
                 else:
-                    activated = item.activate()
-                    if isinstance(activated, Menu):
-                        sub_ret = activated.run()
+                    action = item.activate()
+                    if isinstance(action, SubMenuAction):
+                        sub_ret = action.menu.run()
                         if sub_ret is not BACK_SENTINEL:
                             return sub_ret
                         self.display.display.show(main_group)
-                    elif isinstance(activated, ExitMenu):
-                        return activated.value
-                    elif activated:
+                    elif isinstance(action, ExitAction):
+                        return action.value
+                    elif isinstance(action, ActivateAction):
                         item_active = True
                         self.highlight_label(text_label, False)
                         self.highlight_label(value_label)
+                    elif isinstance(action, IgnoreAction):
+                        if action.changed:
+                            self.refresh_value(value_label, item)
                     else:
-                        # item might have changed
-                        self.refresh_value(value_label, item)
+                        assert False, action  # unreachable
                 time.sleep(self.DEBOUNCE_TIME)  # FIXME use adafruit lib?
 
             delta = self.encoder.delta()
@@ -215,9 +240,8 @@ class FinalMenuItem(AbstractMenuItem):
     def value_str(self) -> None:
         return None
 
-    def activate(self) -> ExitMenu:
-        # Exit the menu on activation
-        return ExitMenu(self.value)
+    def activate(self) -> ExitAction:
+        return ExitAction(self.value)
 
     def __repr__(self) -> str:
         return f"FinalMenuItem({repr(self.text)}, ...)"
@@ -236,9 +260,9 @@ class CallbackMenuItem(AbstractMenuItem):
     def value_str(self) -> None:
         return None
 
-    def activate(self) -> bool:
+    def activate(self) -> IgnoreAction:
         self.value()
-        return False
+        return IgnoreAction(changed=False)
 
 
 class IntMenuItem(AbstractMenuItem):
@@ -264,8 +288,8 @@ class IntMenuItem(AbstractMenuItem):
         self.maximum = maximum
         self.suffix = suffix
 
-    def activate(self) -> bool:
-        return True
+    def activate(self) -> ActivateAction:
+        return ActivateAction()
 
     def process_delta(self, delta: int) -> None:
         self.value = utils.clamp(self.value + delta, self.minimum, self.maximum)
@@ -282,8 +306,8 @@ class TimeMenuItem(AbstractMenuItem):
         self.maximum = maximum
         self.step = step
 
-    def activate(self) -> bool:
-        return True
+    def activate(self) -> ActivateAction:
+        return ActivateAction()
 
     def process_delta(self, delta: int) -> None:
         self.value = utils.clamp(
@@ -317,9 +341,9 @@ class ToggleMenuItem(AbstractMenuItem):
     def __init__(self, text: str, default: bool = False) -> None:
         super().__init__(text, default)
 
-    def activate(self) -> bool:
+    def activate(self) -> IgnoreAction:
         self.value = not self.value
-        return False
+        return IgnoreAction(changed=True)
 
     def value_str(self) -> str:
         return "[x]" if self.value else "[ ]"
@@ -344,11 +368,11 @@ class SelectMenuItem(AbstractMenuItem):
         self.values = values
         self.cycle_on_activate = cycle_on_activate
 
-    def activate(self) -> bool:
+    def activate(self) -> IgnoreAction | ActivateAction:
         if self.cycle_on_activate:
             self.process_delta(1)
-            return False
-        return True
+            return IgnoreAction(changed=True)
+        return ActivateAction()
 
     def process_delta(self, delta: int) -> None:
         self.index += delta
@@ -363,11 +387,11 @@ class SubMenuItem(AbstractMenuItem):
     def __init__(self, text: str, items: list[AbstractMenuItem]) -> None:
         super().__init__(text, items)
 
-    def activate(self) -> Menu:
+    def activate(self) -> SubMenuAction:
         assert self.menu is not None
-        return Menu(
+        return SubMenuAction(Menu(
             display=self.menu.display, encoder=self.menu.encoder, items=self.value
-        )
+        ))
 
     def value_str(self) -> None:
         return None
