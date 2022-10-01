@@ -52,6 +52,7 @@ class AbstractMenuItem:
         self.text = text
         self.value = value
         self.active = False
+        self.selectable = True
         self.menu: Menu | None = None  # gets set in Menu.__init__
 
     def process_delta(self, delta: int) -> None:
@@ -72,6 +73,7 @@ class AbstractMenuItem:
         """
         self.active = not self.active
         return ActivationChangeAction()
+
 
 class Menu:
 
@@ -162,6 +164,9 @@ class Menu:
 
             self.selected += delta
             self.selected %= len(self.labels)
+            while not self.item.selectable:
+                self.selected += 1 if delta > 0 else -1
+                self.selected %= len(self.labels)
 
             self.highlight_labels(text=True)
 
@@ -186,33 +191,35 @@ class Menu:
         assert self.value_label is not None
         self.value_label.text = value
 
-    def create_label(self, text: str, x: int = 0, y: int = 0) -> Label:
-        return Label(
-            self.font,
-            text=text,
-            # initial selected item gets handled in run()
-            color=WHITE,
-            background_color=BLACK,
-            x=x,
-            y=y,
-        )
-
     def get_labels(self) -> list[tuple[Label, Label | None]]:
         labels = []
         for item in self.items:
-            value = item.value_str()
-            row_labels = (
-                self.create_label(item.text),
-                None if value is None else self.create_label(value),
+            text_label = Label(
+                self.font,
+                text=item.text,
+                color=WHITE if item.selectable else BLACK,
+                background_color=BLACK if item.selectable else WHITE,
             )
-            labels.append(row_labels)
+
+            value = item.value_str()
+            if value is None:
+                value_label = None
+            else:
+                value_label = Label(
+                    self.font, text=value, color=WHITE, background_color=BLACK
+                )
+
+            labels.append((text_label, value_label))
 
         return labels
 
     def get_page_label(self) -> Label:
         page_label_str = self.page_label_str(0)
-        page_label = self.create_label(
-            page_label_str,
+        page_label = Label(
+            self.font,
+            text=page_label_str,
+            color=WHITE,
+            background_color=BLACK,
             x=self.display.WIDTH - self.font_width * len(page_label_str),
             y=self.display.HEIGHT - self.font_height // 2,
         )
@@ -409,6 +416,15 @@ class SubMenuItem(AbstractMenuItem):
         return SubMenuAction(
             Menu(display=self.menu.display, encoder=self.menu.encoder, items=self.value)
         )
+
+    def value_str(self) -> None:
+        return None
+
+
+class TitleMenuItem(AbstractMenuItem):
+    def __init__(self, text: str) -> None:
+        super().__init__(text, value=None)
+        self.selectable = False
 
     def value_str(self) -> None:
         return None
