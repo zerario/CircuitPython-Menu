@@ -142,7 +142,10 @@ class Menu:
 
                 sub_ret = action.menu.run()
                 if sub_ret is not BACK_SENTINEL:
+                    # Exit the entire menu from a sub-menu
                     return sub_ret
+
+                # We got back from the sub-menu, so we need to redraw.
                 self.show()
             else:
                 assert False, action  # unreachable
