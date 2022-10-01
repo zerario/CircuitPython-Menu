@@ -32,6 +32,11 @@ class ActivateAction(Action):
     pass
 
 
+class DeactivateAction(Action):
+
+    pass
+
+
 class IgnoreAction(Action):
     def __init__(self, *, changed: bool) -> None:
         self.changed = changed
@@ -71,6 +76,14 @@ class AbstractMenuItem:
         - SubMenuAction: The sub-menu gets displayed.
         """
         raise NotImplementedError
+
+    def deactivate(self) -> Action:
+        """Called when the button was pressed while this item was activated.
+
+        Usually should deactivate this item, but could get ignored.
+        Could also get creative and toggle a submenu, though!
+        """
+        return DeactivateAction()
 
 
 class Menu:
@@ -128,25 +141,34 @@ class Menu:
                 continue
 
             if self.item_active:
-                self.item_active = False
-                self.highlight_labels(text=True, value=False)
+                action = self.item.deactivate()
             else:
                 action = self.item.activate()
-                if isinstance(action, SubMenuAction):
-                    sub_ret = action.menu.run()
-                    if sub_ret is not BACK_SENTINEL:
-                        return sub_ret
-                    self.show()
-                elif isinstance(action, ExitAction):
-                    return action.value
-                elif isinstance(action, ActivateAction):
-                    self.item_active = True
-                    self.highlight_labels(text=False, value=True)
-                elif isinstance(action, IgnoreAction):
-                    if action.changed:
-                        self.refresh_value()
-                else:
-                    assert False, action  # unreachable
+
+            if isinstance(action, ExitAction):
+                return action.value
+            elif isinstance(action, ActivateAction):
+                self.item_active = True
+                self.highlight_labels(text=False, value=True)
+            elif isinstance(action, DeactivateAction):
+                self.item_active = False
+                self.highlight_labels(text=True, value=False)
+            elif isinstance(action, IgnoreAction):
+                if action.changed:
+                    self.refresh_value()
+            elif isinstance(action, SubMenuAction):
+                # just in case someone decides to use this as deactivation action
+                if self.item_active:
+                    self.item_active = False
+                    self.highlight_labels(text=True, value=False)
+
+                sub_ret = action.menu.run()
+                if sub_ret is not BACK_SENTINEL:
+                    return sub_ret
+                self.show()
+            else:
+                assert False, action  # unreachable
+
             time.sleep(self.DEBOUNCE_TIME)  # FIXME use adafruit lib?
 
     def handle_rotation(self):
