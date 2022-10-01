@@ -22,6 +22,9 @@ class AbstractMenuItem:
     def process_delta(self, delta: int) -> None:
         raise NotImplementedError
 
+    def get_texts(self) -> tuple[str, str | None]:
+        raise NotImplementedError
+
 
 class Menu:
 
@@ -48,44 +51,70 @@ class Menu:
 
         while True:
             if self.encoder.pressed:
+                time.sleep(self.DEBOUNCE_TIME)  # FIXME use adafruit lib?
                 item = self.items[selected]
                 if isinstance(item, FinalMenuItem):
                     return item.value
-                else:
-                    item_active = not item_active
-                    time.sleep(self.DEBOUNCE_TIME)  # FIXME use adafruit lib?
+                elif item_active:
+                    item_active = False
+                    self.highlight_label(labels[selected][1], False)
+                    self.highlight_label(labels[selected][0], True)
+                elif not item_active:
+                    item_active = True
+                    self.highlight_label(labels[selected][0], False)
+                    self.highlight_label(labels[selected][1], True)
 
             delta = self.encoder.delta()
             if delta and item_active:
                 item = self.items[selected]
                 item.process_delta(delta)
-                labels[selected].text = str(item)
+                for x, text in enumerate(item.get_texts()):
+                    if text is not None:
+                        label = labels[selected][x]
+                        assert label is not None
+                        label.text = text
             elif delta:
-                labels[selected].color = WHITE
-                labels[selected].background_color = BLACK
+                self.highlight_label(labels[selected][0], False)
                 selected = (selected + delta) % self.lines
-                labels[selected].color = BLACK
-                labels[selected].background_color = WHITE
+                self.highlight_label(labels[selected][0], True)
 
-    def render(self, selected: int = 0) -> tuple[GridLayout, list[Label]]:
+    def highlight_label(self, label: Label | None, active: bool) -> None:
+        if label is None:
+            return
+        label.color = BLACK if active else WHITE
+        label.background_color = WHITE if active else BLACK
+
+    def render(
+        self, selected: tuple[int, int] = (0, 0)
+    ) -> tuple[GridLayout, list[tuple[Label, Label | None]]]:
         layout = GridLayout(
             x=0,
             y=0,
             width=self.display.WIDTH,
             height=self.display.HEIGHT,
-            grid_size=(1, self.lines),
+            grid_size=(2, self.lines),
         )
         labels = []
 
-        for i, item in enumerate(self.items):
-            label = Label(
-                self.font,
-                text=str(item),
-                color=BLACK if i == selected else WHITE,
-                background_color=WHITE if i == selected else BLACK,
-            )
-            labels.append(label)
-            layout.add_content(label, grid_position=(0, i), cell_size=(1, 1))
+        for y, item in enumerate(self.items):
+            row_labels = []
+
+            for x, text in enumerate(item.get_texts()):
+                if text is None:
+                    row_labels.append(None)
+                    continue
+
+                is_selected = (x, y) == selected
+                label = Label(
+                    self.font,
+                    text=text,
+                    color=BLACK if is_selected else WHITE,
+                    background_color=WHITE if is_selected else BLACK,
+                )
+                row_labels.append(label)
+                layout.add_content(label, grid_position=(x, y), cell_size=(1, 1))
+
+            labels.append(tuple(row_labels))
 
         return layout, labels
 
@@ -102,8 +131,8 @@ class FinalMenuItem(AbstractMenuItem):
         self.text = text
         self.value = value
 
-    def __str__(self) -> str:
-        return self.text
+    def get_texts(self) -> tuple[str, None]:
+        return self.text, None
 
     def __repr__(self) -> str:
         return f"FinalMenuItem({repr(self.text)}, ...)"
@@ -121,9 +150,7 @@ class IntMenuItem(AbstractMenuItem):
         self.maximum = maximum
 
     def process_delta(self, delta: int) -> None:
-        print(delta)
         self.value = utils.clamp(self.value + delta, self.minimum, self.maximum)
-        print(self.value)
 
-    def __str__(self) -> str:
-        return f"{self.text}: {self.value}"
+    def get_texts(self) -> tuple[str, str]:
+        return self.text, str(self.value)
