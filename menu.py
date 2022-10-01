@@ -139,18 +139,38 @@ class FinalMenuItem(AbstractMenuItem):
 
 
 class IntMenuItem(AbstractMenuItem):
-    def __init__(self, text: str, default: int, minimum: int, maximum: int) -> None:
-        if not minimum <= default <= maximum:
+    def __init__(
+        self,
+        text: str,
+        default: int = 0,
+        minimum: int | None = None,
+        maximum: int | None = None,
+        suffix: str = "",
+    ) -> None:
+        if minimum is not None and default < minimum:
             raise ValueError(
-                f"Invalid default value {default}, needs to be between {minimum} and {maximum}"
+                f"Invalid default value {default}, needs to be >= {minimum}"
             )
+        if maximum is not None and default > maximum:
+            raise ValueError(
+                f"Invalid default value {default}, needs to be <= {maximum}"
+            )
+
         self.text = text
         self.value = default
         self.minimum = minimum
         self.maximum = maximum
+        self.suffix = suffix
 
     def process_delta(self, delta: int) -> None:
         self.value = utils.clamp(self.value + delta, self.minimum, self.maximum)
 
     def get_texts(self) -> tuple[str, str]:
-        return self.text, str(self.value)
+        return self.text, f"{self.value}{self.suffix}"
+
+
+class SecondsMenuItem(IntMenuItem):
+    def __init__(
+        self, text: str, default: int = 0, minimum: int = 0, maximum: int | None = None
+    ):
+        super().__init__(text, default, minimum, maximum, suffix="s")
