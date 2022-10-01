@@ -1,6 +1,7 @@
 import displayio
 import terminalio
 import time
+import math
 
 try:
     from typing import Any, TYPE_CHECKING
@@ -44,6 +45,7 @@ class AbstractMenuItem:
         raise NotImplementedError
 
     if TYPE_CHECKING:
+
         @property
         def text(self) -> str:
             raise NotImplementedError
@@ -60,8 +62,8 @@ class Menu:
         self.encoder = encoder
         self.items = items
         self.font = terminalio.FONT
-        _, font_height = self.font.get_bounding_box()
-        self.lines = min(len(self.items), self.display.HEIGHT // font_height)
+        self.font_width, self.font_height = self.font.get_bounding_box()
+        self.lines = min(len(self.items), self.display.HEIGHT // self.font_height)
 
     def run(self):
         main_group = displayio.Group()
@@ -70,6 +72,9 @@ class Menu:
         labels = self.get_labels()
         layout = self.paginate(labels)
         main_group.append(layout)
+
+        page_label = self.get_page_label()
+        main_group.append(page_label)
 
         selected = 0
         item = self.items[selected]
@@ -113,6 +118,7 @@ class Menu:
                 page_index = selected // self.lines
                 if page_index != layout.showing_page_index:
                     layout.show_page(page_index=page_index)
+                    page_label.text = self.page_label_str(page_index)
 
     def highlight_label(self, label: Label | None, active: bool = True) -> None:
         assert label is not None  # annotation only exists to make calling easier
@@ -125,13 +131,15 @@ class Menu:
         assert value is not None
         label.text = value
 
-    def create_label(self, text: str) -> Label:
+    def create_label(self, text: str, x: int = 0, y: int = 0) -> Label:
         return Label(
             self.font,
             text=text,
             # initial selected item gets handled in run()
             color=WHITE,
             background_color=BLACK,
+            x=x,
+            y=y,
         )
 
     def get_labels(self) -> list[tuple[Label, Label | None]]:
@@ -140,11 +148,25 @@ class Menu:
             value = item.value_str()
             row_labels = (
                 self.create_label(item.text),
-                None if value is None else self.create_label(value)
+                None if value is None else self.create_label(value),
             )
             labels.append(row_labels)
 
         return labels
+
+    def get_page_label(self) -> Label:
+        page_label_str = self.page_label_str(0)
+        page_label = self.create_label(
+            page_label_str,
+            x=self.display.WIDTH - self.font_width * len(page_label_str),
+            y=self.display.HEIGHT - self.font_height // 2,
+        )
+        return page_label
+
+    def page_label_str(self, cur_page_index: int) -> str:
+        page_count = math.ceil(len(self.items) / self.lines)
+        digits = len(str(page_count))
+        return f"[{cur_page_index + 1:{digits}}/{page_count:{digits}}]"
 
     def paginate(self, labels: list[tuple[Label, Label | None]]) -> PageLayout:
         page_layout = PageLayout(0, 0)
