@@ -370,22 +370,31 @@ class FinalMenuItem(NoValueMenuItem):
     """A text item which quits the menu when selected.
 
     The menu's run() method will return the given value.
+    When serializing, True is returned if this item was clicked.
 
     Useful to build menus where a single selection gets taken too.
     """
 
     def __init__(self, text: str, value: Any = None) -> None:
         super().__init__(text, value)
+        self.selected = False
 
     def handle_press(self) -> ExitAction:
+        self.selected = True
         return ExitAction(self.value)
 
+    def serialize(self) -> bool:
+        return self.selected
 
-class BackMenuItem(FinalMenuItem):
+
+class BackMenuItem(NoValueMenuItem):
     """Go back from a sub-menu."""
 
     def __init__(self, text: str = "Back") -> None:
-        super().__init__(text, value=BACK_SENTINEL)
+        super().__init__(text, value=None)
+
+    def handle_press(self) -> ExitAction:
+        return ExitAction(BACK_SENTINEL)
 
 
 class CallbackMenuItem(NoValueMenuItem):
@@ -431,7 +440,6 @@ class IntMenuItem(TextMenuItem):
 
 
 class PercentageMenuItem(IntMenuItem):
-
     def __init__(self, text: str, default: int = 0) -> None:
         super().__init__(text=text, default=default, minimum=0, maximum=100, suffix="%")
 
@@ -524,7 +532,6 @@ class SelectMenuItem(TextMenuItem):
 
 
 class SubMenuItem(NoValueMenuItem):
-
     def init_menu(self, menu: "Menu", *, add_back: bool = True) -> None:
         super().init_menu(menu)
         if add_back:
