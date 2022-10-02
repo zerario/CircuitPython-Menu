@@ -4,6 +4,7 @@ import digitalio
 import rotaryio
 import time
 import math
+import fontio
 
 try:
     from typing import Any
@@ -54,12 +55,27 @@ class AbstractMenuItem:
         self.value = value
         self.active = False
         self.selectable = True
-        self.menu: Menu | None = None  # gets set in Menu.__init__
+
+        # get set via init_menu()
+        self.menu: Menu | None = None
+        self.drawable: displayio.Group | None = None
+
+    def init_menu(self, menu: "Menu") -> None:
+        """Attach the item to the given menu."""
+        self.menu = menu
+        self.drawable = self._init_value_drawable()
 
     def handle_delta(self, delta: int) -> None:
         raise NotImplementedError
 
-    def value_str(self) -> str | None:
+    def _init_value_drawable(self) -> displayio.Group | None:
+        """Get the drawable for this menu item."""
+        raise NotImplementedError
+
+    def update_value_drawable(
+        self, *, highlight: bool = False, value: bool = False
+    ) -> None:
+        """Called when the drawable should be updated, e.g. after activation/change."""
         raise NotImplementedError
 
     def handle_press(self) -> Action:
@@ -74,6 +90,42 @@ class AbstractMenuItem:
         """
         self.active = not self.active
         return ActivationChangeAction()
+
+
+class TextMenuItem(AbstractMenuItem):
+
+    """Menu item showing as a text label.
+
+    Subclasses can override value_str() to customize the displayed string.
+    """
+
+    drawable: Label
+
+    def value_str(self) -> str | None:
+        raise NotImplementedError
+
+    def _init_value_drawable(self) -> Label | None:
+        text = self.value_str()
+        if text is None:
+            return None
+
+        assert self.menu is not None
+        return Label(self.menu.font, text=text, color=WHITE, background_color=BLACK)
+
+    def update_value_drawable(
+        self, *, highlight: bool = False, value: bool = False
+    ) -> None:
+        if self.drawable is None:
+            return
+
+        if highlight:
+            self.drawable.color = BLACK if self.active else WHITE
+            self.drawable.background_color = WHITE if self.active else BLACK
+
+        if value:
+            text = self.value_str()
+            assert text is not None
+            self.drawable.text = text
 
 
 class Menu:
@@ -101,23 +153,22 @@ class Menu:
         self.button_pressed_value = button_pressed_value
 
         self.items = items
-        for item in items:
-            item.menu = self
-
         self.font = terminalio.FONT
         self.font_width, self.font_height = self.font.get_bounding_box()
         self.lines = min(len(self.items), self.height // self.font_height)
 
+        for item in items:
+            item.init_menu(self)
         self.display_group = displayio.Group()
-        self.labels = self.get_labels()
-        self.layout = self.paginate(self.labels)
+        self.drawables = self.get_drawables()
+        self.layout = self.paginate(self.drawables)
         self.display_group.append(self.layout)
 
         self.page_label = self.get_page_label()
         self.display_group.append(self.page_label)
 
         self.selected = 0
-        self.highlight_labels(text=True)
+        self.highlight_label(True)
 
     def copy_with_items(self, items: list[AbstractMenuItem]) -> "Menu":
         """Get a new menu based on this one, with the given items."""
@@ -135,16 +186,6 @@ class Menu:
     def item(self) -> AbstractMenuItem:
         return self.items[self.selected]
 
-    @property
-    def text_label(self) -> Label:
-        text_label, _ = self.labels[self.selected]
-        return text_label
-
-    @property
-    def value_label(self) -> Label | None:
-        _, value_label = self.labels[self.selected]
-        return value_label
-
     def show(self):
         self.display.show(self.display_group)
 
@@ -161,14 +202,15 @@ class Menu:
             if isinstance(action, ExitAction):
                 return action.value
             elif isinstance(action, ActivationChangeAction):
-                self.highlight_labels(text=not self.item.active, value=self.item.active)
+                self.item.update_value_drawable(highlight=True)
+                self.highlight_label(not self.item.active)
             elif isinstance(action, IgnoreAction):
                 if action.changed:
-                    self.refresh_value()
+                    self.item.update_value_drawable(value=True)
             elif isinstance(action, SubMenuAction):
                 # just in case someone decides to use this as deactivation action
                 assert not self.item.active
-                self.highlight_labels(text=True, value=False)
+                self.highlight_label(True)
 
                 sub_ret = action.menu.run()
                 if sub_ret is not BACK_SENTINEL:
@@ -188,41 +230,30 @@ class Menu:
 
         if delta and self.item.active:
             self.item.handle_delta(delta)
-            self.refresh_value()
+            self.item.update_value_drawable(value=True)
         elif delta:
-            self.highlight_labels(text=False)
+            self.highlight_label(False)
 
             self.selected += delta
-            self.selected %= len(self.labels)
+            self.selected %= len(self.items)
             while not self.item.selectable:
                 self.selected += 1 if delta > 0 else -1
-                self.selected %= len(self.labels)
+                self.selected %= len(self.items)
 
-            self.highlight_labels(text=True)
+            self.highlight_label(True)
 
             page_index = self.selected // self.lines
             if page_index != self.layout.showing_page_index:
                 self.layout.show_page(page_index=page_index)
                 self.page_label.text = self.page_label_str(page_index)
 
-    def highlight_labels(
-        self, text: bool | None = None, value: bool | None = None
-    ) -> None:
-        if text is not None:
-            self.text_label.color = BLACK if text else WHITE
-            self.text_label.background_color = WHITE if text else BLACK
-        if value is not None and self.value_label is not None:
-            self.value_label.color = BLACK if value else WHITE
-            self.value_label.background_color = WHITE if value else BLACK
+    def highlight_label(self, active: bool) -> None:
+        text_label, _ = self.drawables[self.selected]
+        text_label.color = BLACK if active else WHITE
+        text_label.background_color = WHITE if active else BLACK
 
-    def refresh_value(self) -> None:
-        value = self.item.value_str()
-        assert value is not None
-        assert self.value_label is not None
-        self.value_label.text = value
-
-    def get_labels(self) -> list[tuple[Label, Label | None]]:
-        labels = []
+    def get_drawables(self) -> list[tuple[Label, displayio.Group | None]]:
+        drawables = []
         for item in self.items:
             text_label = Label(
                 self.font,
@@ -231,17 +262,9 @@ class Menu:
                 background_color=BLACK if item.selectable else WHITE,
             )
 
-            value = item.value_str()
-            if value is None:
-                value_label = None
-            else:
-                value_label = Label(
-                    self.font, text=value, color=WHITE, background_color=BLACK
-                )
+            drawables.append((text_label, item.drawable))
 
-            labels.append((text_label, value_label))
-
-        return labels
+        return drawables
 
     def get_page_label(self) -> Label:
         page_label_str = self.page_label_str(0)
@@ -260,10 +283,12 @@ class Menu:
         digits = len(str(page_count))
         return f"[{cur_page_index + 1:{digits}}/{page_count:{digits}}]"
 
-    def paginate(self, labels: list[tuple[Label, Label | None]]) -> PageLayout:
+    def paginate(
+        self, drawables: list[tuple[Label, displayio.Group | None]]
+    ) -> PageLayout:
         page_layout = PageLayout(0, 0)
 
-        for page_labels in utils.chunk(labels, self.lines):
+        for page_drawables in utils.chunk(drawables, self.lines):
             layout = GridLayout(
                 x=0,
                 y=0,
@@ -272,11 +297,11 @@ class Menu:
                 grid_size=(2, self.lines),
             )
             page_layout.add_content(layout)
-            for y, col_labels in enumerate(page_labels):
-                for x, label in enumerate(col_labels):
-                    if label is not None:
+            for y, col_drawables in enumerate(page_drawables):
+                for x, drawable in enumerate(col_drawables):
+                    if drawable is not None:
                         layout.add_content(
-                            label,
+                            drawable,
                             grid_position=(x, y),
                             # FIXME could we use the full width without value?
                             cell_size=(1, 1),
@@ -296,7 +321,7 @@ class FinalMenuItem(AbstractMenuItem):
     def __init__(self, text: str, value: Any = None) -> None:
         super().__init__(text, value)
 
-    def value_str(self) -> None:
+    def _init_value_drawable(self) -> None:
         return None
 
     def handle_press(self) -> ExitAction:
@@ -319,7 +344,7 @@ class CallbackMenuItem(AbstractMenuItem):
     The callback gets the menu instance as argument.
     """
 
-    def value_str(self) -> None:
+    def _init_value_drawable(self) -> None:
         return None
 
     def handle_press(self) -> IgnoreAction:
@@ -328,7 +353,7 @@ class CallbackMenuItem(AbstractMenuItem):
         return IgnoreAction(changed=False)
 
 
-class IntMenuItem(AbstractMenuItem):
+class IntMenuItem(TextMenuItem):
     def __init__(
         self,
         text: str,
@@ -358,7 +383,7 @@ class IntMenuItem(AbstractMenuItem):
         return f"{self.value}{self.suffix}"
 
 
-class TimeMenuItem(AbstractMenuItem):
+class TimeMenuItem(TextMenuItem):
     def __init__(
         self, text: str, default: int = 0, maximum: int | None = None, step: int = 1
     ):
@@ -394,7 +419,7 @@ class TimeMenuItem(AbstractMenuItem):
         return " ".join(parts)
 
 
-class ToggleMenuItem(AbstractMenuItem):
+class ToggleMenuItem(TextMenuItem):
     def __init__(self, text: str, default: bool = False) -> None:
         super().__init__(text, default)
 
@@ -406,7 +431,7 @@ class ToggleMenuItem(AbstractMenuItem):
         return "[x]" if self.value else "[ ]"
 
 
-class SelectMenuItem(AbstractMenuItem):
+class SelectMenuItem(TextMenuItem):
     def __init__(
         self,
         text: str,
@@ -448,7 +473,7 @@ class SubMenuItem(AbstractMenuItem):
         assert self.menu is not None
         return SubMenuAction(self.menu.copy_with_items(self.value))
 
-    def value_str(self) -> None:
+    def _init_value_drawable(self) -> None:
         return None
 
 
@@ -457,5 +482,5 @@ class TitleMenuItem(AbstractMenuItem):
         super().__init__(text, value=None)
         self.selectable = False
 
-    def value_str(self) -> None:
+    def _init_value_drawable(self) -> None:
         return None
