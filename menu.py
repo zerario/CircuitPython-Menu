@@ -1,5 +1,7 @@
 import displayio
 import terminalio
+import digitalio
+import rotaryio
 import time
 import math
 
@@ -12,7 +14,6 @@ from adafruit_display_text.label import Label
 from adafruit_displayio_layout.layouts.grid_layout import GridLayout
 from adafruit_displayio_layout.layouts.page_layout import PageLayout
 
-import hardware as hw
 import utils
 
 
@@ -81,17 +82,24 @@ class Menu:
 
     def __init__(
         self,
+        items: list[AbstractMenuItem],
         display: displayio.Display,
         width: int,
         height: int,
-        encoder: hw.Encoder,
-        items: list[AbstractMenuItem],
+        encoder: rotaryio.IncrementalEncoder,
+        button: digitalio.DigitalInOut,
+        button_pressed_value=False,
     ) -> None:
         self.display = display
         self.width = width
         self.height = height
 
         self.encoder = encoder
+        self.encoder_last_position = self.encoder.position
+
+        self.button = button
+        self.button_pressed_value = button_pressed_value
+
         self.items = items
         for item in items:
             item.menu = self
@@ -110,6 +118,18 @@ class Menu:
 
         self.selected = 0
         self.highlight_labels(text=True)
+
+    def copy_with_items(self, items: list[AbstractMenuItem]) -> "Menu":
+        """Get a new menu based on this one, with the given items."""
+        return Menu(
+            items,
+            display=self.display,
+            width=self.width,
+            height=self.height,
+            encoder=self.encoder,
+            button=self.button,
+            button_pressed_value=self.button_pressed_value,
+        )
 
     @property
     def item(self) -> AbstractMenuItem:
@@ -133,7 +153,7 @@ class Menu:
 
         while True:
             self.handle_rotation()
-            if not self.encoder.pressed:
+            if self.button.value != self.button_pressed_value:
                 continue
 
             action = self.item.handle_press()
@@ -163,7 +183,9 @@ class Menu:
             time.sleep(self.DEBOUNCE_TIME)  # FIXME use adafruit lib?
 
     def handle_rotation(self):
-        delta = self.encoder.delta()
+        delta = self.encoder_last_position - self.encoder.position
+        self.encoder_last_position = self.encoder.position
+
         if delta and self.item.active:
             self.item.handle_delta(delta)
             self.refresh_value()
@@ -424,9 +446,7 @@ class SubMenuItem(AbstractMenuItem):
 
     def handle_press(self) -> SubMenuAction:
         assert self.menu is not None
-        return SubMenuAction(
-            Menu(display=self.menu.display, encoder=self.menu.encoder, items=self.value)
-        )
+        return SubMenuAction(self.menu.copy_with_items(self.value))
 
     def value_str(self) -> None:
         return None
