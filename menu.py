@@ -72,10 +72,12 @@ class AbstractMenuItem:
         """Get the drawable for this menu item."""
         raise NotImplementedError
 
-    def update_value_drawable(
-        self, *, highlight: bool = False, value: bool = False
-    ) -> None:
-        """Called when the drawable should be updated, e.g. after activation/change."""
+    def update_value(self) -> None:
+        """Called when the drawable should be updated after value change."""
+        raise NotImplementedError
+
+    def update_value_highlight(self) -> None:
+        """Called when the drawable should be updated after selecting/deselecting."""
         raise NotImplementedError
 
     def handle_press(self) -> Action:
@@ -112,20 +114,18 @@ class TextMenuItem(AbstractMenuItem):
         assert self.menu is not None
         return Label(self.menu.font, text=text, color=WHITE, background_color=BLACK)
 
-    def update_value_drawable(
-        self, *, highlight: bool = False, value: bool = False
-    ) -> None:
+    def update_value(self) -> None:
         if self.drawable is None:
             return
+        text = self.value_str()
+        assert text is not None
+        self.drawable.text = text
 
-        if highlight:
-            self.drawable.color = BLACK if self.active else WHITE
-            self.drawable.background_color = WHITE if self.active else BLACK
-
-        if value:
-            text = self.value_str()
-            assert text is not None
-            self.drawable.text = text
+    def update_value_highlight(self) -> None:
+        if self.drawable is None:
+            return
+        self.drawable.color = BLACK if self.active else WHITE
+        self.drawable.background_color = WHITE if self.active else BLACK
 
 
 class Menu:
@@ -202,11 +202,11 @@ class Menu:
             if isinstance(action, ExitAction):
                 return action.value
             elif isinstance(action, ActivationChangeAction):
-                self.item.update_value_drawable(highlight=True)
+                self.item.update_value_highlight()
                 self.highlight_label(not self.item.active)
             elif isinstance(action, IgnoreAction):
                 if action.changed:
-                    self.item.update_value_drawable(value=True)
+                    self.item.update_value()
             elif isinstance(action, SubMenuAction):
                 # just in case someone decides to use this as deactivation action
                 assert not self.item.active
@@ -230,7 +230,7 @@ class Menu:
 
         if delta and self.item.active:
             self.item.handle_delta(delta)
-            self.item.update_value_drawable(value=True)
+            self.item.update_value()
         elif delta:
             self.highlight_label(False)
 
