@@ -22,6 +22,7 @@ BLACK = 0x000000
 WHITE = 0xFFFFFF
 UNSET = object()
 BACK_SENTINEL = object()
+UNSERIALIZABLE = object()
 
 
 class Action:
@@ -92,6 +93,10 @@ class AbstractMenuItem:
         """
         self.active = not self.active
         return ActivationChangeAction()
+
+    def serialize(self) -> Any:
+        """Get the data behind this item in a serializable format."""
+        return self.value
 
 
 class TextMenuItem(AbstractMenuItem):
@@ -199,6 +204,13 @@ class Menu:
     def hide(self):
         """Show CircuitPython REPL again."""
         self.display.show(None)  # type: ignore[arg-type]
+
+    def serialize(self) -> dict[str, Any]:
+        """Get a dict of all item values in this menu.
+
+        Items which are not serializable will get returned as UNSERIALIZABLE.
+        """
+        return {item.text: item.serialize() for item in self.items}
 
     def run(self):
         self.show()
@@ -330,7 +342,18 @@ class Menu:
         return page_layout
 
 
-class FinalMenuItem(AbstractMenuItem):
+class NoValueMenuItem(AbstractMenuItem):
+
+    """Base class for menu items with no user-visible value."""
+
+    def _init_value_drawable(self) -> None:
+        return None
+
+    def serialize(self) -> Any:
+        return UNSERIALIZABLE
+
+
+class FinalMenuItem(NoValueMenuItem):
     """A text item which quits the menu when selected.
 
     The menu's run() method will return the given value.
@@ -341,14 +364,8 @@ class FinalMenuItem(AbstractMenuItem):
     def __init__(self, text: str, value: Any = None) -> None:
         super().__init__(text, value)
 
-    def _init_value_drawable(self) -> None:
-        return None
-
     def handle_press(self) -> ExitAction:
         return ExitAction(self.value)
-
-    def __repr__(self) -> str:
-        return f"FinalMenuItem({repr(self.text)}, ...)"
 
 
 class BackMenuItem(FinalMenuItem):
@@ -358,14 +375,11 @@ class BackMenuItem(FinalMenuItem):
         super().__init__(text, value=BACK_SENTINEL)
 
 
-class CallbackMenuItem(AbstractMenuItem):
+class CallbackMenuItem(NoValueMenuItem):
     """A text item which calls a given callback (the value) if pressed.
 
     The callback gets the menu instance as argument.
     """
-
-    def _init_value_drawable(self) -> None:
-        return None
 
     def handle_press(self) -> IgnoreAction:
         assert self.menu is not None
@@ -496,22 +510,22 @@ class SelectMenuItem(TextMenuItem):
         return str(self.value)
 
 
-class SubMenuItem(AbstractMenuItem):
-    def __init__(self, text: str, items: list[AbstractMenuItem]) -> None:
-        super().__init__(text, items)
+class SubMenuItem(NoValueMenuItem):
+
+    def init_menu(self, menu: "Menu", *, add_back: bool = True) -> None:
+        super().init_menu(menu)
+        if add_back:
+            self.value.append(BackMenuItem())
+        self.submenu = menu.copy_with_items(self.value)
 
     def handle_press(self) -> SubMenuAction:
-        assert self.menu is not None
-        return SubMenuAction(self.menu.copy_with_items(self.value))
+        return SubMenuAction(self.submenu)
 
-    def _init_value_drawable(self) -> None:
-        return None
+    def serialize(self) -> Any:
+        return self.submenu.serialize()
 
 
-class TitleMenuItem(AbstractMenuItem):
+class TitleMenuItem(NoValueMenuItem):
     def __init__(self, text: str) -> None:
         super().__init__(text, value=None)
         self.selectable = False
-
-    def _init_value_drawable(self) -> None:
-        return None
