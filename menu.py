@@ -189,6 +189,10 @@ class Menu:
     def show(self):
         self.display.show(self.display_group)
 
+    def hide(self):
+        """Show CircuitPython REPL again."""
+        self.display.show(None)  # type: ignore[arg-type]
+
     def run(self):
         self.show()
 
@@ -200,6 +204,7 @@ class Menu:
             action = self.item.handle_press()
 
             if isinstance(action, ExitAction):
+                self.hide()
                 return action.value
             elif isinstance(action, ActivationChangeAction):
                 self.item.update_value_highlight()
@@ -215,6 +220,7 @@ class Menu:
                 sub_ret = action.menu.run()
                 if sub_ret is not BACK_SENTINEL:
                     # Exit the entire menu from a sub-menu
+                    self.hide()
                     return sub_ret
 
                 # We got back from the sub-menu, so we need to redraw.
