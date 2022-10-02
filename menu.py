@@ -4,6 +4,7 @@ import digitalio
 import rotaryio
 import time
 import math
+import fontio
 
 try:
     from typing import Any
@@ -13,7 +14,6 @@ except ImportError:
 from adafruit_display_text.label import Label
 from adafruit_displayio_layout.layouts.grid_layout import GridLayout
 from adafruit_displayio_layout.layouts.page_layout import PageLayout
-from adafruit_displayio_layout.widgets.switch_round import SwitchRound
 
 import utils
 
@@ -295,7 +295,6 @@ class Menu:
                 width=self.width,
                 height=self.height,
                 grid_size=(2, self.lines),
-                cell_padding=1,
             )
             page_layout.add_content(layout)
             for y, col_drawables in enumerate(page_drawables):
@@ -420,10 +419,7 @@ class TimeMenuItem(TextMenuItem):
         return " ".join(parts)
 
 
-class ToggleMenuItem(AbstractMenuItem):
-
-    drawable: SwitchRound
-
+class ToggleMenuItem(TextMenuItem):
     def __init__(self, text: str, default: bool = False) -> None:
         super().__init__(text, default)
 
@@ -431,25 +427,8 @@ class ToggleMenuItem(AbstractMenuItem):
         self.value = not self.value
         return IgnoreAction(changed=True)
 
-    def _init_value_drawable(self) -> SwitchRound:
-        assert self.menu is not None
-        return SwitchRound(
-            fill_color_off=BLACK,
-            fill_color_on=BLACK,
-            outline_color_on=WHITE,
-            outline_color_off=WHITE,
-            background_color_off=WHITE,
-            background_color_on=WHITE,
-            background_outline_color_off=WHITE,
-            background_outline_color_on=WHITE,
-            display_button_text=False,
-            switch_stroke=1,
-            text_stroke=1,
-            animation_time=0.0001,
-        )
-
-    def update_value(self) -> None:
-        self.drawable.value = self.value
+    def value_str(self) -> str:
+        return "[x]" if self.value else "[ ]"
 
 
 class SelectMenuItem(TextMenuItem):
