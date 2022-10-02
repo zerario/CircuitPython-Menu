@@ -223,6 +223,7 @@ class Menu:
             action = self.item.handle_press()
 
             if isinstance(action, ExitAction):
+                self.debounce()
                 self.hide()
                 return action.value
             elif isinstance(action, ActivationChangeAction):
@@ -236,6 +237,7 @@ class Menu:
                 assert not self.item.active
                 self.highlight_label(True)
 
+                self.debounce()
                 sub_ret = action.menu.run()
                 if sub_ret is not BACK_SENTINEL:
                     # Exit the entire menu from a sub-menu
@@ -247,7 +249,10 @@ class Menu:
             else:
                 assert False, action  # unreachable
 
-            time.sleep(self.DEBOUNCE_TIME)  # FIXME use adafruit lib?
+            self.debounce()
+
+    def debounce(self):
+        time.sleep(self.DEBOUNCE_TIME)  # FIXME use adafruit lib?
 
     def handle_rotation(self):
         delta = self.encoder_last_position - self.encoder.position
