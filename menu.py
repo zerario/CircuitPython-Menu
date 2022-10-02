@@ -400,6 +400,12 @@ class IntMenuItem(TextMenuItem):
         return f"{self.value}{self.suffix}"
 
 
+class PercentageMenuItem(IntMenuItem):
+
+    def __init__(self, text: str, default: int = 0) -> None:
+        super().__init__(text=text, default=default, minimum=0, maximum=100, suffix="%")
+
+
 class TimeMenuItem(TextMenuItem):
     # FIXME improve typing for floats
     def __init__(
