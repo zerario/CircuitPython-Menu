@@ -303,15 +303,22 @@ class Menu:
                 grid_size=(2, self.lines),
             )
             page_layout.add_content(layout)
-            for y, col_drawables in enumerate(page_drawables):
-                for x, drawable in enumerate(col_drawables):
-                    if drawable is not None:
-                        layout.add_content(
-                            drawable,
-                            grid_position=(x, y),
-                            # FIXME could we use the full width without value?
-                            cell_size=(1, 1),
-                        )
+            for y, (text_label, value_drawable) in enumerate(page_drawables):
+                if value_drawable is None:
+                    text_span = 2
+                else:
+                    text_span = 1
+                    layout.add_content(
+                        value_drawable,
+                        grid_position=(1, y),
+                        cell_size=(1, 1),
+                    )
+
+                layout.add_content(
+                    text_label,
+                    grid_position=(0, y),
+                    cell_size=(text_span, 1),
+                )
 
         return page_layout
 
