@@ -168,6 +168,10 @@ class Menu:
         self.display_group.append(self.page_label)
 
         self.selected = 0
+        while not self.item.selectable:
+            # FIXME make sure there is at least one selectable item
+            self.selected += 1
+
         self.highlight_label(True)
 
     def copy_with_items(self, items: list[AbstractMenuItem]) -> "Menu":
