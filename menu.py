@@ -210,7 +210,15 @@ class Menu:
 
         Items which are not serializable will get returned as UNSERIALIZABLE.
         """
-        return {item.text: item.serialize() for item in self.items}
+        data = {}
+        for item in self.items:
+            value = item.serialize()
+            if value is UNSERIALIZABLE:
+                continue
+            if item.text in data:
+                raise ValueError(f"Duplicate key {item.text}")
+            data[item.text] = value
+        return data
 
     def run(self):
         self.show()
