@@ -55,13 +55,13 @@ class AbstractMenuItem:
         self.selectable = True
         self.menu: Menu | None = None  # gets set in Menu.__init__
 
-    def process_delta(self, delta: int) -> None:
+    def handle_delta(self, delta: int) -> None:
         raise NotImplementedError
 
     def value_str(self) -> str | None:
         raise NotImplementedError
 
-    def activate(self) -> Action:
+    def handle_press(self) -> Action:
         """Called when the button was pressed on this item.
 
         A menu item can return different values here:
@@ -128,7 +128,7 @@ class Menu:
             if not self.encoder.pressed:
                 continue
 
-            action = self.item.activate()
+            action = self.item.handle_press()
 
             if isinstance(action, ExitAction):
                 return action.value
@@ -157,7 +157,7 @@ class Menu:
     def handle_rotation(self):
         delta = self.encoder.delta()
         if delta and self.item.active:
-            self.item.process_delta(delta)
+            self.item.handle_delta(delta)
             self.refresh_value()
         elif delta:
             self.highlight_labels(text=False)
@@ -269,7 +269,7 @@ class FinalMenuItem(AbstractMenuItem):
     def value_str(self) -> None:
         return None
 
-    def activate(self) -> ExitAction:
+    def handle_press(self) -> ExitAction:
         return ExitAction(self.value)
 
     def __repr__(self) -> str:
@@ -284,7 +284,7 @@ class BackMenuItem(FinalMenuItem):
 
 
 class CallbackMenuItem(AbstractMenuItem):
-    """A text item which calls a given callback (the value) if activated.
+    """A text item which calls a given callback (the value) if pressed.
 
     The callback gets the menu instance as argument.
     """
@@ -292,7 +292,7 @@ class CallbackMenuItem(AbstractMenuItem):
     def value_str(self) -> None:
         return None
 
-    def activate(self) -> IgnoreAction:
+    def handle_press(self) -> IgnoreAction:
         assert self.menu is not None
         self.value(self.menu)
         return IgnoreAction(changed=False)
@@ -321,7 +321,7 @@ class IntMenuItem(AbstractMenuItem):
         self.maximum = maximum
         self.suffix = suffix
 
-    def process_delta(self, delta: int) -> None:
+    def handle_delta(self, delta: int) -> None:
         self.value = utils.clamp(self.value + delta, self.minimum, self.maximum)
 
     def value_str(self) -> str:
@@ -336,7 +336,7 @@ class TimeMenuItem(AbstractMenuItem):
         self.maximum = maximum
         self.step = step
 
-    def process_delta(self, delta: int) -> None:
+    def handle_delta(self, delta: int) -> None:
         self.value = utils.clamp(
             self.value + delta * self.step, lower=0, upper=self.maximum
         )
@@ -368,7 +368,7 @@ class ToggleMenuItem(AbstractMenuItem):
     def __init__(self, text: str, default: bool = False) -> None:
         super().__init__(text, default)
 
-    def activate(self) -> IgnoreAction:
+    def handle_press(self) -> IgnoreAction:
         self.value = not self.value
         return IgnoreAction(changed=True)
 
@@ -383,7 +383,7 @@ class SelectMenuItem(AbstractMenuItem):
         values: list[Any],
         default: Any = UNSET,
         *,
-        cycle_on_activate: bool = False,
+        cycle_on_press: bool = False,
     ) -> None:
         if default is UNSET:
             self.index = 0
@@ -393,15 +393,15 @@ class SelectMenuItem(AbstractMenuItem):
 
         super().__init__(text, default)
         self.values = values
-        self.cycle_on_activate = cycle_on_activate
+        self.cycle_on_press = cycle_on_press
 
-    def activate(self) -> IgnoreAction | ActivationChangeAction:
-        if self.cycle_on_activate:
-            self.process_delta(1)
+    def handle_press(self) -> IgnoreAction | ActivationChangeAction:
+        if self.cycle_on_press:
+            self.handle_delta(1)
             return IgnoreAction(changed=True)
-        return super().activate()
+        return super().handle_press()
 
-    def process_delta(self, delta: int) -> None:
+    def handle_delta(self, delta: int) -> None:
         self.index += delta
         self.index %= len(self.values)
         self.value = self.values[self.index]
@@ -414,7 +414,7 @@ class SubMenuItem(AbstractMenuItem):
     def __init__(self, text: str, items: list[AbstractMenuItem]) -> None:
         super().__init__(text, items)
 
-    def activate(self) -> SubMenuAction:
+    def handle_press(self) -> SubMenuAction:
         assert self.menu is not None
         return SubMenuAction(
             Menu(display=self.menu.display, encoder=self.menu.encoder, items=self.value)
