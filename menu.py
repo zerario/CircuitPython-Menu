@@ -397,8 +397,13 @@ class IntMenuItem(TextMenuItem):
 
 
 class TimeMenuItem(TextMenuItem):
+    # FIXME improve typing for floats
     def __init__(
-        self, text: str, default: int = 0, maximum: int | None = None, step: int = 1
+        self,
+        text: str,
+        default: int | float = 0,
+        maximum: int | float | None = None,
+        step: int | float = 1,
     ):
         super().__init__(text, default)
         self.maximum = maximum
