@@ -142,6 +142,9 @@ class Menu:
         button: digitalio.DigitalInOut,
         button_pressed_value=False,
     ) -> None:
+        if not items:
+            raise ValueError("Empty menus are not allowed")
+
         self.display = display
         self.width = width
         self.height = height
