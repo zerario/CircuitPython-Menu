@@ -80,9 +80,17 @@ class Menu:
     DEBOUNCE_TIME = 0.25
 
     def __init__(
-        self, display: hw.Display, encoder: hw.Encoder, items: list[AbstractMenuItem]
+        self,
+        display: displayio.Display,
+        width: int,
+        height: int,
+        encoder: hw.Encoder,
+        items: list[AbstractMenuItem],
     ) -> None:
         self.display = display
+        self.width = width
+        self.height = height
+
         self.encoder = encoder
         self.items = items
         for item in items:
@@ -90,7 +98,7 @@ class Menu:
 
         self.font = terminalio.FONT
         self.font_width, self.font_height = self.font.get_bounding_box()
-        self.lines = min(len(self.items), self.display.HEIGHT // self.font_height)
+        self.lines = min(len(self.items), self.height // self.font_height)
 
         self.display_group = displayio.Group()
         self.labels = self.get_labels()
@@ -118,7 +126,7 @@ class Menu:
         return value_label
 
     def show(self):
-        self.display.display.show(self.display_group)
+        self.display.show(self.display_group)
 
     def run(self):
         self.show()
@@ -220,8 +228,8 @@ class Menu:
             text=page_label_str,
             color=WHITE,
             background_color=BLACK,
-            x=self.display.WIDTH - self.font_width * len(page_label_str),
-            y=self.display.HEIGHT - self.font_height // 2,
+            x=self.width - self.font_width * len(page_label_str),
+            y=self.height - self.font_height // 2,
         )
         return page_label
 
@@ -237,8 +245,8 @@ class Menu:
             layout = GridLayout(
                 x=0,
                 y=0,
-                width=self.display.WIDTH,
-                height=self.display.HEIGHT,
+                width=self.width,
+                height=self.height,
                 grid_size=(2, self.lines),
             )
             page_layout.add_content(layout)
