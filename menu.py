@@ -401,12 +401,24 @@ class CallbackMenuItem(NoValueMenuItem):
     """A text item which calls a given callback (the value) if pressed.
 
     The callback gets the menu instance as argument.
+
+    When serializing inside the callback, True is returned if this item was
+    clicked.
     """
+
+    def __init__(self, text: str, value: Callable[["Menu"], None]) -> None:
+        super().__init__(text, value)
+        self.selected = False
 
     def handle_press(self) -> IgnoreAction:
         assert self.menu is not None
+        self.selected = True
         self.value(self.menu)
+        self.selected = False
         return IgnoreAction(changed=False)
+
+    def serialize(self) -> bool:
+        return self.selected
 
 
 class IntMenuItem(TextMenuItem):
