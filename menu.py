@@ -7,7 +7,7 @@ import math
 import fontio
 
 try:
-    from typing import Any
+    from typing import Any, Callable
 except ImportError:
     pass
 
@@ -27,30 +27,59 @@ UNSERIALIZABLE = object()
 
 class Action:
 
-    pass
+    """Base class for actions returned by ``handle_press()`` on menu items.
+
+    The returned action is used to determine what the menu code should do after
+    the menu item has been clicked.
+    """
 
 
 class ActivationChangeAction(Action):
 
-    pass
+    """Update the item's active state."""
 
 
 class IgnoreAction(Action):
+
+    """Item is not activatable (but might e.g. toggle its value).
+
+    If the value has changed (``changed`` is set to ``True``), the menu item
+    will be redrawn.
+    """
+
     def __init__(self, *, changed: bool) -> None:
         self.changed = changed
 
 
 class ExitAction(Action):
+
+    """Exit the menu and return the given value."""
+
     def __init__(self, value: Any) -> None:
         self.value = value
 
 
 class SubMenuAction(Action):
+
+    """Switch to the given sub-menu."""
+
     def __init__(self, menu: "Menu") -> None:
         self.menu = menu
 
 
 class AbstractMenuItem:
+
+    """Base class for an individual menu item.
+
+    Attributes:
+        text: The text to display for this item.
+        value: The value to return when this item is selected.
+        active: Whether this item is currently active. Set by subclasses in
+                ``handle_press()``.
+        selectable: Whether this item can be selected. Set by subclasses.
+        menu: The menu this item is attached to.
+    """
+
     def __init__(self, text: str, value: Any) -> None:
         self.text = text
         self.value = value
@@ -67,18 +96,34 @@ class AbstractMenuItem:
         self.drawable = self._init_value_drawable()
 
     def handle_delta(self, delta: int) -> None:
+        """Handle up/down movement on this item.
+
+        This is called when the user moves the encoder while this item is active.
+
+        Needs to be implemented by subclasses.
+        """
         raise NotImplementedError
 
     def _init_value_drawable(self) -> displayio.Group | None:
-        """Get the drawable for this menu item."""
+        """Get the drawable for this menu item.
+
+        Needs to be implemented by subclasses. Most items will likely want to subclass
+        TextMenuItem instead, which returns a Label.
+        """
         raise NotImplementedError
 
     def update_value(self) -> None:
-        """Called when the drawable should be updated after value change."""
+        """Called when the drawable should be updated after value change.
+
+        Needs to be implemented by subclasses.
+        """
         raise NotImplementedError
 
     def update_value_highlight(self) -> None:
-        """Called when the drawable should be updated after selecting/deselecting."""
+        """Called when the drawable should be updated after selecting/deselecting.
+
+        Needs to be implemented by subclasses.
+        """
         raise NotImplementedError
 
     def handle_press(self) -> Action:
@@ -101,14 +146,12 @@ class AbstractMenuItem:
 
 class TextMenuItem(AbstractMenuItem):
 
-    """Menu item showing as a text label.
-
-    Subclasses can override value_str() to customize the displayed string.
-    """
+    """Menu item showing as a text label."""
 
     drawable: Label
 
     def value_str(self) -> str | None:
+        """The string that should be displayed. Needs to be overridden by subclasses."""
         raise NotImplementedError
 
     def _init_value_drawable(self) -> Label | None:
@@ -135,6 +178,18 @@ class TextMenuItem(AbstractMenuItem):
 
 class Menu:
 
+    """A menu shown on a display, that can be navigated with a rotary encoder.
+
+    Attributes:
+        items: The menu items to display.
+        display: The display to show the menu on.
+        width: The width of the display.
+        height: The height of the display.
+        encoder: The rotary encoder to use for navigation.
+        button: The button to use for selection.
+        button_pressed_value: The value of the button when it is pressed.
+    """
+
     DEBOUNCE_TIME = 0.25
 
     def __init__(
@@ -145,7 +200,7 @@ class Menu:
         height: int,
         encoder: rotaryio.IncrementalEncoder,
         button: digitalio.DigitalInOut,
-        button_pressed_value=False,
+        button_pressed_value: bool = False,
     ) -> None:
         if not items:
             raise ValueError("Empty menus are not allowed")
@@ -196,9 +251,11 @@ class Menu:
 
     @property
     def item(self) -> AbstractMenuItem:
+        """The currently selected item."""
         return self.items[self.selected]
 
     def show(self):
+        """Show this menu on the display."""
         self.display.show(self.display_group)
 
     def hide(self):
@@ -221,6 +278,7 @@ class Menu:
         return data
 
     def run(self):
+        """Run this menu."""
         self.show()
 
         while True:
@@ -422,6 +480,16 @@ class CallbackMenuItem(NoValueMenuItem):
 
 
 class IntMenuItem(TextMenuItem):
+    """A text item which allows the user to change an integer value.
+
+    Atributes:
+        text: The text to display.
+        default: The default value initially displayed.
+        minimum: The minimum value allowed.
+        maximum: The maximum value allowed.
+        suffix: A string to append to the displayed value.
+    """
+
     def __init__(
         self,
         text: str,
@@ -452,11 +520,24 @@ class IntMenuItem(TextMenuItem):
 
 
 class PercentageMenuItem(IntMenuItem):
+    """A text item which allows the user to change a percentage value."""
+
     def __init__(self, text: str, default: int = 0) -> None:
         super().__init__(text=text, default=default, minimum=0, maximum=100, suffix="%")
 
 
 class TimeMenuItem(TextMenuItem):
+
+    """A text item which allows the user to change a time value.
+
+    Attributes:
+        text: The text to display.
+        default: The default value initially displayed.
+        maximum: The maximum value allowed.
+        step: The amount of time (in seconds, can be a fraction) to add/subtract
+              for a single rotatary encoder tick.
+    """
+
     # FIXME improve typing for floats
     def __init__(
         self,
@@ -498,6 +579,9 @@ class TimeMenuItem(TextMenuItem):
 
 
 class ToggleMenuItem(TextMenuItem):
+
+    """A toggle for a boolean value."""
+
     def __init__(self, text: str, default: bool = False) -> None:
         super().__init__(text, default)
 
@@ -510,6 +594,16 @@ class ToggleMenuItem(TextMenuItem):
 
 
 class SelectMenuItem(TextMenuItem):
+
+    """A list of values to select from.
+
+    Attributes:
+        text: The text to display.
+        values: The list of values to select from.
+        default: The default value initially displayed.
+        cycle_on_press: If True, the value will cycle when the item is pressed.
+    """
+
     def __init__(
         self,
         text: str,
@@ -544,6 +638,14 @@ class SelectMenuItem(TextMenuItem):
 
 
 class SubMenuItem(NoValueMenuItem):
+
+    """A menu item which opens a submenu.
+
+    The given ``menu`` will be displayed when the item is selected.
+    A "Back" menu item will be added to the end of the submenu by default.
+    Set ``add_back`` to False to disable this behaviour.
+    """
+
     def init_menu(self, menu: "Menu", *, add_back: bool = True) -> None:
         super().init_menu(menu)
         if add_back:
@@ -558,6 +660,8 @@ class SubMenuItem(NoValueMenuItem):
 
 
 class TitleMenuItem(NoValueMenuItem):
+    """A menu item which displays a title."""
+
     def __init__(self, text: str) -> None:
         super().__init__(text, value=None)
         self.selectable = False
