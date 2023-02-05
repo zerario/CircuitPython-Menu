@@ -93,7 +93,9 @@ Usage Example
 =============
 
 .. todo:: Add a quick, simple example. It and other examples should live in the
-examples folder and be included in docs/examples.rst.
+  examples folder and be included in docs/examples.rst.
+
+TODO
 
 Documentation
 =============
