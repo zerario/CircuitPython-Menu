@@ -12,6 +12,8 @@ Interactive CircuitPython menu library using RotaryIO and DisplayIO
 * Author(s): Zerario <derg@zerario.dev>
 """
 
+from __future__ import annotations
+
 import displayio
 import terminalio
 import digitalio
