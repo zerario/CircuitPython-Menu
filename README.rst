@@ -86,6 +86,8 @@ Or the following command to update an existing version:
 Usage Example
 =============
 
+.. image:: docs/_static/demo.jpg
+
 .. code:: python
 
     import board
