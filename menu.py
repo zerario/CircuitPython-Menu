@@ -221,6 +221,7 @@ class Menu:
         encoder: rotaryio.IncrementalEncoder,
         button: digitalio.DigitalInOut,
         button_pressed_value: bool = False,
+        context: Any = None,
     ) -> None:
         if not items:
             raise ValueError("Empty menus are not allowed")
@@ -256,6 +257,7 @@ class Menu:
             self.selected += 1
 
         self.highlight_label(True)
+        self.context = context
 
     def copy_with_items(self, items: list[AbstractMenuItem]) -> "Menu":
         """Get a new menu based on this one, with the given items."""
