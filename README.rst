@@ -7,12 +7,6 @@ Introduction
     :alt: Documentation Status
 
 
-
-.. image:: https://img.shields.io/discord/327254708534116352.svg
-    :target: https://adafru.it/discord
-    :alt: Discord
-
-
 .. image:: https://github.com/zerario/CircuitPython_menu/workflows/Build%20CI/badge.svg
     :target: https://github.com/zerario/CircuitPython_menu/actions
     :alt: Build Status
@@ -92,61 +86,60 @@ Or the following command to update an existing version:
 Usage Example
 =============
 
-```python
-import board
-import busio
-import displayio
-import rotaryio
-import digitalio
-import adafruit_displayio_sh1107
+.. code-block:: python
+    import board
+    import busio
+    import displayio
+    import rotaryio
+    import digitalio
+    import adafruit_displayio_sh1107
 
-import menu
+    import menu
 
-displayio.release_displays()
+    displayio.release_displays()
 
-# TODO: Adjust those to your board
-DISPLAY_WIDTH = 128
-DISPLAY_HEIGHT = 64
-DISPLAY_ROTATION = 0
-i2c = busio.I2C(scl=board.IO34, sda=board.IO39)
-display_bus = displayio.I2CDisplay(i2c, device_address=0x3C, reset=board.IO21)
-display = adafruit_displayio_sh1107.SH1107(
-    display_bus, width=DISPLAY_WIDTH, height=DISPLAY_HEIGHT, rotation=DISPLAY_ROTATION
-)
+    # TODO: Adjust those to your board
+    DISPLAY_WIDTH = 128
+    DISPLAY_HEIGHT = 64
+    DISPLAY_ROTATION = 0
+    i2c = busio.I2C(scl=board.IO34, sda=board.IO39)
+    display_bus = displayio.I2CDisplay(i2c, device_address=0x3C, reset=board.IO21)
+    display = adafruit_displayio_sh1107.SH1107(
+        display_bus, width=DISPLAY_WIDTH, height=DISPLAY_HEIGHT, rotation=DISPLAY_ROTATION
+    )
 
-enc = rotaryio.IncrementalEncoder(board.IO1, board.IO3, divisor=2)
-button = digitalio.DigitalInOut(board.IO2)
-button.direction = digitalio.Direction.INPUT
-button.pull = digitalio.Pull.UP
+    enc = rotaryio.IncrementalEncoder(board.IO1, board.IO3, divisor=2)
+    button = digitalio.DigitalInOut(board.IO2)
+    button.direction = digitalio.Direction.INPUT
+    button.pull = digitalio.Pull.UP
 
 
-MENU_ITEMS = [
-    menu.TitleMenuItem("==== Demo ==="),
-    menu.PercentageMenuItem("Awesome", default=50),
-    menu.TimeMenuItem("Duration"),
-    menu.IntMenuItem("Threshold", default=42),
-    menu.SubMenuItem(
-        "Print...",
-        [
-            menu.CallbackMenuItem("BEEP", lambda menu: print("BEEP!")),
-            menu.CallbackMenuItem("BOOP", lambda menu: print("BOOP!")),
-        ],
-    ),
-    menu.FinalMenuItem("Exit"),
-]
+    MENU_ITEMS = [
+        menu.TitleMenuItem("==== Demo ==="),
+        menu.PercentageMenuItem("Awesome", default=50),
+        menu.TimeMenuItem("Duration"),
+        menu.IntMenuItem("Threshold", default=42),
+        menu.SubMenuItem(
+            "Print...",
+            [
+                menu.CallbackMenuItem("BEEP", lambda menu: print("BEEP!")),
+                menu.CallbackMenuItem("BOOP", lambda menu: print("BOOP!")),
+            ],
+        ),
+        menu.FinalMenuItem("Exit"),
+    ]
 
-main_menu = menu.Menu(
-    items=MENU_ITEMS,
-    display=display,
-    width=DISPLAY_WIDTH,
-    height=DISPLAY_HEIGHT,
-    encoder=enc,
-    button=button,
-)
+    main_menu = menu.Menu(
+        items=MENU_ITEMS,
+        display=display,
+        width=DISPLAY_WIDTH,
+        height=DISPLAY_HEIGHT,
+        encoder=enc,
+        button=button,
+    )
 
-main_menu.run()
-print(main_menu.serialize())
-```
+    main_menu.run()
+    print(main_menu.serialize())
 
 Documentation
 =============
