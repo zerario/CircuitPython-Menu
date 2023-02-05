@@ -87,6 +87,7 @@ Usage Example
 =============
 
 .. code:: python
+
     import board
     import busio
     import displayio
