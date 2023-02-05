@@ -86,7 +86,7 @@ Or the following command to update an existing version:
 Usage Example
 =============
 
-.. code-block:: python
+.. code:: python
     import board
     import busio
     import displayio
